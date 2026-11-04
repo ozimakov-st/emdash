@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { app, BrowserWindow, shell } from 'electron';
+import { AUTO_UPDATE_DISABLED } from '@core/primitives/app-identity/api/app-identity';
 import { clearBootFailureMarker } from '@main/bootstrap/core/boot-guard';
 import { getLogFilePath } from '@main/host/file-logger';
 import { log } from '@main/lib/logger';
@@ -52,7 +53,7 @@ export async function showRecoveryWindow(options: RecoveryWindowOptions): Promis
     ]);
     // initialize() is idempotent, so recovery can safely call it even if the
     // normal updater phase completed before a later boot phase failed.
-    await updaterModule.updateService.initialize();
+    if (!AUTO_UPDATE_DISABLED) await updaterModule.updateService.initialize();
     updateSvc = updaterModule.updateService;
     // Cast to the minimal interface — EventStreamHost satisfies it structurally.
     updateEventSource = eventsModule.updateEvents as unknown as RecoveryUpdateEvents;
