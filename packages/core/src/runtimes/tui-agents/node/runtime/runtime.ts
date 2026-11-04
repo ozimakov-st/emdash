@@ -38,6 +38,7 @@ import {
   noopConversationLifecycleReporter,
   type ConversationLifecycleReporter,
 } from '#services/conversation-reports/node';
+import { SessionGitCredentialChannels } from '#services/git-credential-channels/node';
 import {
   decodeLegacyTmuxSessionName,
   killTmuxSession,
@@ -52,6 +53,7 @@ import {
   type PtyExitInfo,
   type PtySession,
   type PtySpawnSpec,
+  XTERM_PTY_DEFAULT_ENV,
 } from '#services/pty/api';
 import { resolveTerminalShell } from '#services/pty/node';
 import {
@@ -113,9 +115,14 @@ export class TuiAgentsRuntime {
    */
   private readonly tmuxKeepAliveMs: number;
   private readonly reports: ConversationLifecycleReporter;
+  private readonly gitCredentialChannels: SessionGitCredentialChannels;
 
   constructor(private readonly deps: TuiAgentsRuntimeDeps) {
     this.reports = deps.conversationReports ?? noopConversationLifecycleReporter;
+    this.gitCredentialChannels = new SessionGitCredentialChannels(
+      deps.releaseGitCredentialChannel ?? (async () => {}),
+      deps.logger
+    );
     this.registry = new PtyRegistry(deps.spawner);
     this.clock = deps.clock ?? systemClock;
     this.sessionsLiveModel = createTuiSessionsLiveModel();
@@ -210,6 +217,7 @@ export class TuiAgentsRuntime {
           name: 'prompt-spill',
           run: (key) => this.cleanupPromptSpill(key),
         },
+        { name: 'git-credential-channel', run: (key) => this.gitCredentialChannels.release(key) },
         {
           name: 'config',
           run: (key) => {
@@ -295,6 +303,14 @@ export class TuiAgentsRuntime {
     input: TuiAgentStartInput
   ): Promise<Result<{ outcome: TuiStartOutcome }, TuiStartError>> {
     input = this.normalizePlatformInput(input);
+    return this.gitCredentialChannels.handIn(input.gitCredentials, () =>
+      this.startSessionExclusive(input)
+    );
+  }
+
+  private async startSessionExclusive(
+    input: TuiAgentStartInput
+  ): Promise<Result<{ outcome: TuiStartOutcome }, TuiStartError>> {
     const provider = this.resolveProvider(input.providerId);
     if (!provider.success) return err(provider.error);
 
@@ -305,6 +321,7 @@ export class TuiAgentsRuntime {
       const preparedInput = await this.preparePromptInput(input);
       const config: TuiSessionConfig = { input: preparedInput, intent: 'fresh' };
       this.configs.set(input.conversationId, config);
+      await this.gitCredentialChannels.hold(input.conversationId, input.gitCredentials);
       this.lifecycle.recordInput(input.conversationId);
       this.unexpectedRespawns.delete(input.conversationId);
 
@@ -316,6 +333,7 @@ export class TuiAgentsRuntime {
       );
       if (!result.success) {
         await this.cleanupPromptSpill(input.conversationId);
+        await this.gitCredentialChannels.release(input.conversationId);
         return result;
       }
 
@@ -327,6 +345,14 @@ export class TuiAgentsRuntime {
     input: TuiAgentStartInput
   ): Promise<Result<{ outcome: TuiResumeOutcome }, TuiResumeError>> {
     input = this.normalizePlatformInput(input);
+    return this.gitCredentialChannels.handIn(input.gitCredentials, () =>
+      this.resumeSessionExclusive(input)
+    );
+  }
+
+  private async resumeSessionExclusive(
+    input: TuiAgentStartInput
+  ): Promise<Result<{ outcome: TuiResumeOutcome }, TuiResumeError>> {
     const provider = this.resolveProvider(input.providerId);
     if (!provider.success) return err(provider.error);
 
@@ -342,6 +368,7 @@ export class TuiAgentsRuntime {
         ...(input.sessionId ? {} : { resumeFallback: true }),
       };
       this.configs.set(input.conversationId, config);
+      await this.gitCredentialChannels.hold(input.conversationId, input.gitCredentials);
       this.lifecycle.recordInput(input.conversationId);
       this.unexpectedRespawns.delete(input.conversationId);
       this.setResumeState(input.conversationId, {
@@ -358,6 +385,7 @@ export class TuiAgentsRuntime {
       );
       if (!result.success) {
         await this.cleanupPromptSpill(input.conversationId);
+        await this.gitCredentialChannels.release(input.conversationId);
         return result;
       }
 
@@ -376,6 +404,7 @@ export class TuiAgentsRuntime {
     if (active) active.pty = null;
     this.markExited(conversationId, null);
     this.agentStates.resetToIdle(conversationId);
+    await this.gitCredentialChannels.release(conversationId);
     // Suspend-but-retain: scrollback, config tombstone, and list entry survive;
     // the stopped config keeps the key sweep-inert (snapshot returns null).
     this.lifecycle.end(conversationId, 'user');
@@ -467,6 +496,7 @@ export class TuiAgentsRuntime {
     this.sessions.clear();
     this.logs.clear();
     this.configs.clear();
+    await this.lifecycle.drainIntents();
   }
 
   private async spawnInto(
@@ -534,19 +564,22 @@ export class TuiAgentsRuntime {
 
     // Git-credential behavior is applied last through the blessed construction (spec:
     // github-git-settings §4) so a "none" scrub wins over provider and hook env.
+    const platform = currentAgentEnvPlatform(this.deps.platform);
     const env = applyGitCredentialsToEnv(
       mergeAgentEnvLayers(
-        currentAgentEnvPlatform(this.deps.platform),
+        platform,
         {
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
           TERM_PROGRAM: 'emdash',
+          ...XTERM_PTY_DEFAULT_ENV,
         },
         command.env,
         config.input.providerVars ?? {},
         hookEnv
       ),
-      config.input.gitCredentials
+      config.input.gitCredentials,
+      platform
     );
     const spawnSpec = await this.spawnSpec(command, config.input, env);
     if (!this.isCurrentGeneration(config.input.conversationId, generation)) {
@@ -559,7 +592,7 @@ export class TuiAgentsRuntime {
         {
           invocation: spawnSpec.invocation,
           cwd: config.input.cwd,
-          env,
+          env: spawnSpec.env,
           cols: config.input.cols,
           rows: config.input.rows,
         },
@@ -602,6 +635,11 @@ export class TuiAgentsRuntime {
               this.reports.sessionEnded(config.input.conversationId);
             } else {
               void this.cleanupPromptSpill(config.input.conversationId);
+              // A tmux client's exit (e.g. a detach) leaves the agent inside running with
+              // its channel; stop, delete and eviction release it with the tmux session.
+              if (!config.input.tmux) {
+                void this.gitCredentialChannels.release(config.input.conversationId);
+              }
               this.lifecycle.end(config.input.conversationId, 'process-exited');
             }
           },
@@ -785,6 +823,7 @@ export class TuiAgentsRuntime {
       if (result.success) return;
 
       await this.cleanupPromptSpill(conversationId);
+      await this.gitCredentialChannels.release(conversationId);
       this.lifecycle.end(conversationId, 'spawn-failed');
       this.deps.logger.warn('TuiAgentsRuntime: respawn/fallback failed', {
         conversationId,
@@ -957,7 +996,7 @@ export class TuiAgentsRuntime {
     command: AgentCommand,
     input: TuiAgentStartInput,
     env: Record<string, string>
-  ): Promise<Pick<PtySpawnSpec, 'invocation'>> {
+  ): Promise<Pick<PtySpawnSpec, 'invocation' | 'env'>> {
     const platform = this.deps.platform ?? process.platform;
     const shellProfile = await resolveTerminalShell({
       intent: 'system',
@@ -993,7 +1032,7 @@ export class TuiAgentsRuntime {
       { conversationId: input.conversationId },
       this.deps.logger
     );
-    return { invocation: resolved.invocation };
+    return { invocation: resolved.invocation, env: resolved.env };
   }
 
   private maybeRespawnAfterUnexpectedExit(
