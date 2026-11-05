@@ -45,7 +45,7 @@ Main files:
 - `.../server/mcp-http-server.ts` — the HTTP listener, token file, and origin checks
 - `.../server/register-tools.ts` — tool definitions
 - `.../server/create-task-from-prompt.ts`, `resolve-from-branch.ts`, `run-task-script.ts`,
-  `attach-project.ts` — tool implementations and their helpers
+  `task-conversation.ts`, `attach-project.ts` — tool implementations and their helpers
 - `.../server/self-registration.ts` — builds and heals the `emdash` entry in agent configs
 - `apps/emdash-desktop/src/core/primitives/mcp/api/managed.ts` — the shape rules that
   identify the managed entry
@@ -67,7 +67,27 @@ Behavior:
 - the transport runs stateless (`sessionIdGenerator: undefined`, JSON responses), so a
   fresh `McpServer` is built per request
 - tools: `list_projects`, `list_tasks`, `create_task`, `rename_task`, `archive_task`,
-  `delete_task`, `run_task_script`, `stop_task_script`
+  `delete_task`, `run_task_script`, `stop_task_script`, `send_task_message`,
+  `get_task_status`
+- `send_task_message` sends text to a task's agent. It picks the task's most recently
+  active conversation (`lastSessionActivityAt`, else `updatedAt`) unless `conversationId`
+  is given. A PTY agent gets the text as a bracketed paste, then a separate `\r` about
+  100 ms later, the same two writes as the context bar's "add and send". An ACP agent gets
+  `acp.sendPrompt` with the default placement, so it is queued while a turn runs. It only
+  talks to a session that is already live on the host (`tuiAgents.sessions` status
+  `running`, or an ACP session that is not `closed` or `suspended`) and never starts,
+  resumes, or wakes one. Archived tasks are refused.
+- `get_task_status` is read-only. `agentStatus` is the app's own cached value
+  (`conversations.agent_status`, null read as `idle`). `latestOutput` is the end of the
+  newest conversation's output: for PTY, the host's retained output log with escape
+  sequences removed (redraws are not replayed, so a repainted line can show more than
+  once), plus the hook-reported `lastAssistantMessage` when the provider has one; for
+  ACP, the newest assistant message from the active turn, else from recent history. If
+  the host cannot be reached, it still returns the task and conversations, with
+  `latestOutput: null` and a `note`.
+- neither tool opens a project attachment: releasing a lease the tool took itself could
+  stop the very sessions it wants to reach. They reach the host through the runtime
+  broker, so local and SSH workspaces work the same.
 - `delete_task` takes the delete dialog's options: `deleteWorktree` (default true),
   `deleteBranch` (default false, and deliberately not the UI's `deleteBranchByDefault`
   setting, so an agent never deletes a branch nobody asked about), and

@@ -12,6 +12,12 @@ import { createTaskFromPrompt, validProviderIds } from './create-task-from-promp
 import type { McpToolDependencies } from './dependencies';
 import { runTaskScript, stopTaskScript } from './run-task-script';
 import {
+  DEFAULT_STATUS_MAX_CHARS,
+  getTaskStatus,
+  MAX_STATUS_MAX_CHARS,
+  sendTaskMessage,
+} from './task-conversation';
+import {
   inspectBranchDeletion,
   inspectWorktreeChanges,
   resolveTaskWorkspaceId,
@@ -647,6 +653,69 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
     guarded(dependencies, 'stop_task_script', async ({ projectId, taskId, type }) => {
       const result = await stopTaskScript(dependencies, { projectId, taskId, type });
       return result.status === 'not_found' ? errorResult(result.message) : textResult(result);
+    })
+  );
+
+  server.registerTool(
+    'send_task_message',
+    {
+      title: 'Send task message',
+      description:
+        "Sends a follow-up message to a task's running coding agent, as if the user typed it " +
+        'in Emdash: a terminal agent gets the text pasted and submitted with Enter, a chat UI ' +
+        'agent gets it as a user message (queued if a turn is still running). Goes to the ' +
+        "task's most recently active conversation unless conversationId is given. Fails when " +
+        'the task is archived or the conversation is not running; it never starts or resumes ' +
+        'an agent. Use get_task_status to read the reply.',
+      inputSchema: {
+        projectId: projectIdInput,
+        taskId: taskIdInput,
+        message: z.string().min(1).describe('The message to send to the agent'),
+        conversationId: z
+          .string()
+          .optional()
+          .describe(
+            "Conversation id from get_task_status; defaults to the task's most recently active " +
+              'conversation'
+          ),
+      },
+      annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    guarded(dependencies, 'send_task_message', async (input) => {
+      const result = await sendTaskMessage(dependencies, input);
+      return result.success ? textResult(result.data) : errorResult(result.error);
+    })
+  );
+
+  server.registerTool(
+    'get_task_status',
+    {
+      title: 'Get task status',
+      description:
+        "Reads a task's status, the agent status of each of its conversations (idle, working, " +
+        'awaiting-input, completed, or error, as shown in Emdash), and the recent output of the ' +
+        'most recently active conversation. latestOutput.text is the end of that output: the ' +
+        'terminal text without color codes for a terminal agent, or the latest assistant ' +
+        'message for a chat UI agent. Terminal agents that report replies through hooks also ' +
+        'get latestOutput.lastAssistantMessage. Read-only.',
+      inputSchema: {
+        projectId: projectIdInput,
+        taskId: taskIdInput,
+        maxChars: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            `How many characters of output to return, counted from the end; defaults to ` +
+              `${DEFAULT_STATUS_MAX_CHARS}, at most ${MAX_STATUS_MAX_CHARS}`
+          ),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    guarded(dependencies, 'get_task_status', async (input) => {
+      const result = await getTaskStatus(dependencies, input);
+      return result.success ? textResult(result.data) : errorResult(result.error);
     })
   );
 

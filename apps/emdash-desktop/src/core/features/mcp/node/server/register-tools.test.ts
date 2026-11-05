@@ -210,10 +210,12 @@ describe('buildEmdashMcpServer', () => {
       'archive_task',
       'create_task',
       'delete_task',
+      'get_task_status',
       'list_projects',
       'list_tasks',
       'rename_task',
       'run_task_script',
+      'send_task_message',
       'stop_task_script',
     ]);
   });
@@ -623,6 +625,112 @@ describe('buildEmdashMcpServer', () => {
       parse(await callTool(deps, 'delete_task', { projectId: 'p', taskId: 'task-1' }))
     ).toMatchObject({ deleted: true });
     expect(deleteTask).toHaveBeenCalled();
+  });
+
+  /** One row that answers both the task lookup and the conversation list. */
+  const TASK_WITH_CONVERSATION = {
+    id: 'task-1',
+    status: 'in_progress',
+    archivedAt: null,
+    workspaceId: 'workspace-1',
+    provider: 'claude',
+    type: 'pty',
+    agentStatus: 'awaiting-input',
+    lastSessionActivityAt: '2026-11-05T10:00:00.000Z',
+    updatedAt: '2026-11-05 09:00:00',
+  };
+
+  function conversationRuntimes(sendInput: ReturnType<typeof vi.fn>) {
+    const list = (data: unknown) => ({ state: () => ({ snapshot: async () => ({ data }) }) });
+    return {
+      client: async () =>
+        ok({
+          tuiAgents: {
+            sessions: list({ 'task-1': { status: 'running' } }),
+            agentStates: list({}),
+            output: {
+              handle: () => ({
+                snapshot: async () => ({
+                  data: { baseOffset: 0, text: '\x1b[1mSTATUS: done\x1b[0m\r\n', truncated: false },
+                }),
+              }),
+            },
+            sendInput,
+          },
+        }),
+    };
+  }
+
+  it('sends a message to the task agent', async () => {
+    const sendInput = vi.fn(async () => ok(undefined));
+    const deps = dependencies({
+      db: fakeDb([TASK_WITH_CONVERSATION]) as never,
+      runtimes: conversationRuntimes(sendInput) as never,
+    });
+
+    expect(
+      parse(
+        await callTool(deps, 'send_task_message', {
+          projectId: 'p',
+          taskId: 'task-1',
+          message: 'go on',
+        })
+      )
+    ).toEqual({ conversationId: 'task-1', delivered: true });
+    expect(sendInput).toHaveBeenLastCalledWith({ conversationId: 'task-1', data: '\r' });
+  });
+
+  it('reports send_task_message failures as tool errors', async () => {
+    const deps = dependencies({ db: fakeDb([]) as never });
+
+    const result = await callTool(deps, 'send_task_message', {
+      projectId: 'p',
+      taskId: 'missing',
+      message: 'hi',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Task not found in project p: missing');
+  });
+
+  it('reads task status and caps maxChars', async () => {
+    const deps = dependencies({
+      db: fakeDb([TASK_WITH_CONVERSATION]) as never,
+      runtimes: conversationRuntimes(vi.fn()) as never,
+    });
+
+    expect(
+      parse(
+        await callTool(deps, 'get_task_status', {
+          projectId: 'p',
+          taskId: 'task-1',
+          maxChars: 1_000_000,
+        })
+      )
+    ).toEqual({
+      taskId: 'task-1',
+      taskStatus: 'in_progress',
+      conversations: [
+        {
+          conversationId: 'task-1',
+          provider: 'claude',
+          type: 'pty',
+          agentStatus: 'awaiting-input',
+          updatedAt: '2026-11-05T10:00:00.000Z',
+        },
+      ],
+      latestOutput: { conversationId: 'task-1', text: 'STATUS: done\n' },
+    });
+  });
+
+  it('reports get_task_status failures as tool errors', async () => {
+    const result = await callTool(dependencies({ db: fakeDb([]) as never }), 'get_task_status', {
+      projectId: 'p',
+      taskId: 'missing',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Task not found in project p: missing');
   });
 
   it('does not leak internal errors to the caller', async () => {
