@@ -10,7 +10,7 @@ Emdash app. Auto-update is off.
 The sidebar shows the "PM" project first: the local project at `~/Projects/work`
 (override with the env var `OZDASH_PM_PROJECT_PATH`).
 
-- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH).
+- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has the same signature and macOS asks for keychain access only once.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
   originals. Run with `swift <script> <upstream png> <out png>`. Make the `.icns`

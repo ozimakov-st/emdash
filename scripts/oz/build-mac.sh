@@ -16,6 +16,10 @@ cd "$ROOT"
 pnpm install
 cd apps/emdash-desktop
 CSC_IDENTITY_AUTO_DISCOVERY=false pnpm run package:mac -- --arm64 --publish never
-codesign --force --deep --sign - "$APP"
+# Sign with the local "OZdash Local Signing" certificate when it exists
+# (scripts/oz/make-signing-cert.sh), so the signature stays the same across
+# builds and macOS asks for keychain access only once. Otherwise sign ad hoc.
+IDENTITY="$(security find-certificate -c "OZdash Local Signing" -Z 2>/dev/null | awk '/SHA-1/ {print $3}')"
+codesign --force --deep --sign "${IDENTITY:--}" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Built and signed: $APP"
