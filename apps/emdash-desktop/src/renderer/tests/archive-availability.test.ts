@@ -39,6 +39,8 @@ vi.mock('@core/features/tasks/api/browser/task-state/task-selectors', () => ({
 }));
 vi.mock('@core/features/projects/api/browser/stores/project-selectors', () => ({
   getProjectViewStore: () => ({ taskView: mocks.taskView }),
+  // task-item.tsx reads the project to tell whether it is the OZdash PM project.
+  getProjectStore: () => undefined,
 }));
 vi.mock('@core/features/projects/contributions/browser/project-availability-ui', () => ({
   projectAvailabilityUiContribution: {
