@@ -193,7 +193,7 @@ export type LinkTicketTaskResult =
   | { success: true; pmNotified: boolean; warnings: string[] }
   | { success: false; error: string };
 
-/** The New Task dialog props for the board's "New session…" (OZ Tickets pre-selected). */
+/** The New Task dialog props for the board's "New task…" (OZ Tickets pre-selected). */
 export function newTicketSessionModalProps(
   ticket: TicketSummary,
   vaultPath: string,

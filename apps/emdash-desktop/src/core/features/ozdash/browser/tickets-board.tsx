@@ -232,7 +232,7 @@ function TicketCard({
   onRestore,
 }: {
   ticket: TicketSummary;
-  /** Set on open tickets: shows "New session…". */
+  /** Set on open tickets: shows "New task…". */
   vaultPath?: string | null;
   busy: boolean;
   onOpen: (ticket: TicketSummary) => void;
@@ -300,7 +300,7 @@ function TicketCard({
       )}
       <div className="flex items-center gap-2 text-[11px] text-foreground-passive">
         {ticket.updated && <span>Updated {ticket.updated}</span>}
-        {vaultPath && <NewSessionMenu ticket={ticket} vaultPath={vaultPath} />}
+        {vaultPath && <NewTaskMenu ticket={ticket} vaultPath={vaultPath} />}
         {onRestore && (
           <Button
             type="button"
@@ -323,10 +323,10 @@ function TicketCard({
 }
 
 /**
- * "New session…": pick a project, then the New Task dialog opens with this ticket as
+ * "New task…": pick a project, then the New Task dialog opens with this ticket as
  * its OZ Tickets issue. Creating the task records it in the ticket (see ticket-issues.ts).
  */
-const NewSessionMenu = observer(function NewSessionMenu({
+const NewTaskMenu = observer(function NewTaskMenu({
   ticket,
   vaultPath,
 }: {
@@ -347,11 +347,11 @@ const NewSessionMenu = observer(function NewSessionMenu({
     >
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
-          aria-label={`New session for ticket ${ticket.id}`}
+          aria-label={`New task for ticket ${ticket.id}`}
           className="flex items-center gap-1 rounded px-1.5 py-0.5 text-foreground-passive opacity-0 group-hover:opacity-100 hover:bg-background-2 hover:text-foreground focus-visible:opacity-100 data-popup-open:opacity-100"
         >
           <Plus className="size-3" />
-          New session…
+          New task…
         </DropdownMenu.Trigger>
         <DropdownMenu.Content align="end">
           <DropdownMenu.Group>
