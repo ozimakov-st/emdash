@@ -8,7 +8,7 @@ let audioCtx: AudioContext | null = null;
 let settings: NotificationSettings = {
   enabled: true,
   sound: true,
-  customSoundPath: '',
+  customSoundPath: '~/Library/Application Support/emdash-oz/chime.wav', // Fork (OZdash): same Glass chime as other notifications
   osNotifications: true,
   soundFocusMode: 'always',
 };

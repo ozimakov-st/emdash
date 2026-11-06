@@ -19,7 +19,7 @@ export const notificationSettingsContribution = defineSettingsContribution<
   defaults: {
     enabled: true,
     sound: true,
-    customSoundPath: '',
+    customSoundPath: '~/Library/Application Support/emdash-oz/chime.wav', // Fork (OZdash): same Glass chime as other notifications
     osNotifications: true,
     soundFocusMode: 'always',
   },

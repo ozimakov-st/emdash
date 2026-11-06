@@ -22,4 +22,10 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm run package:mac -- --arm64 --publish neve
 IDENTITY="$(security find-certificate -c "OZdash Local Signing" -Z 2>/dev/null | awk '/SHA-1/ {print $3}')"
 codesign --force --deep --sign "${IDENTITY:--}" "$APP"
 codesign --verify --deep --strict "$APP"
+# The notification chime (same Glass sound as the other OZ notifications).
+CHIME="$HOME/Library/Application Support/emdash-oz/chime.wav"
+if [ ! -f "$CHIME" ]; then
+  mkdir -p "$(dirname "$CHIME")"
+  afconvert -f WAVE -d LEI16 /System/Library/Sounds/Glass.aiff "$CHIME"
+fi
 echo "Built and signed: $APP"
