@@ -721,6 +721,7 @@ describe('buildEmdashMcpServer', () => {
         },
       ],
       latestOutput: { conversationId: 'task-1', text: 'STATUS: done\n' },
+      pmTask: null,
     });
   });
 
@@ -732,6 +733,80 @@ describe('buildEmdashMcpServer', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe('Task not found in project p: missing');
+  });
+
+  describe('pmTask (fork)', () => {
+    const pmTask = { id: '123', title: 'Fix login', managerTaskId: 'task-pm' };
+    function fakePmTasks() {
+      return {
+        get: vi.fn(async (taskId: string) => (taskId === 'task-1' ? pmTask : null)),
+        getMany: vi.fn(async () => new Map([['task-1', pmTask]])),
+        set: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+        listInfos: vi.fn(async () => ({})),
+      };
+    }
+
+    it('lists pmTask on each task, or null', async () => {
+      const row = (id: string) => ({
+        id,
+        name: id,
+        status: 'in_progress',
+        updatedAt: '2026-11-05 09:00:00',
+        archivedAt: null,
+        workspaceId: null,
+      });
+      const pmTasks = fakePmTasks();
+      const deps = dependencies({ db: fakeDb([row('task-1'), row('task-2')]) as never, pmTasks });
+
+      const listed = parse(await callTool(deps, 'list_tasks', { projectId: 'p' })) as {
+        tasks: Array<{ id: string; pmTask: unknown }>;
+      };
+
+      expect(listed.tasks.map((task) => [task.id, task.pmTask])).toEqual([
+        ['task-1', pmTask],
+        ['task-2', null],
+      ]);
+      expect(pmTasks.getMany).toHaveBeenCalledWith(['task-1', 'task-2']);
+    });
+
+    it('returns pmTask from get_task_status', async () => {
+      const deps = dependencies({
+        db: fakeDb([TASK_WITH_CONVERSATION]) as never,
+        runtimes: conversationRuntimes(vi.fn()) as never,
+        pmTasks: fakePmTasks(),
+      });
+
+      expect(
+        parse(await callTool(deps, 'get_task_status', { projectId: 'p', taskId: 'task-1' }))
+      ).toMatchObject({ taskId: 'task-1', pmTask });
+    });
+
+    it('rejects a create_task pmTask with a too long id', async () => {
+      const createTask = vi.fn();
+      const deps = dependencies({ tasks: { createTask } as never, pmTasks: fakePmTasks() });
+
+      const result = await callTool(deps, 'create_task', {
+        projectId: 'p',
+        pmTask: { id: 'x'.repeat(33) },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('pmTask.id must be at most 32 characters');
+      expect(createTask).not.toHaveBeenCalled();
+    });
+
+    it('removes the pmTask when the task is deleted', async () => {
+      const pmTasks = fakePmTasks();
+      const deps = {
+        ...deleteDependencies({ deleteTask: vi.fn(async () => ok(undefined)) }),
+        pmTasks,
+      };
+
+      await callTool(deps, 'delete_task', { projectId: 'p', taskId: 'task-1' });
+
+      expect(pmTasks.delete).toHaveBeenCalledWith('task-1');
+    });
   });
 
   it('does not leak internal errors to the caller', async () => {

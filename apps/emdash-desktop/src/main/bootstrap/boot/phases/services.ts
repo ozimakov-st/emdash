@@ -9,7 +9,7 @@ import { integrationPluginRegistry } from '@emdash/plugins/integrations';
 import { pullRequestsPluginRegistry } from '@emdash/plugins/pull-requests';
 import { runWithTimeout } from '@emdash/shared/scheduling';
 import { peek } from '@emdash/wire/state';
-import { app, powerMonitor } from 'electron';
+import { app, ipcMain, powerMonitor } from 'electron';
 import { AccountAuthServerClient } from '@core/features/account/node/services/account-auth-server-client';
 import { AccountOAuthClient } from '@core/features/account/node/services/account-oauth-client';
 import type { AccountKVSchema } from '@core/features/account/node/services/account-session-store';
@@ -63,10 +63,12 @@ import {
   type PromptLibraryKV,
 } from '@core/features/library/node/prompt-library-service';
 import { LocalSettingsSync } from '@core/features/machines/node/local-settings-sync';
+import { OZDASH_PM_TASKS_CHANNEL } from '@core/features/mcp/api/ozdash-pm-task';
 import {
   createEmdashMcpServer,
   type EmdashMcpServerHandle,
 } from '@core/features/mcp/node/server/create-mcp-server';
+import { createPmTaskStore } from '@core/features/mcp/node/server/ozdash-pm-task-store';
 import { previewServerService } from '@core/features/preview-servers/api/node/preview-server-service-instance';
 import { PreviewServerAccessService } from '@core/features/preview-servers/node/preview-server-access-service';
 import type { ProjectAttachmentManager } from '@core/features/projects/api/node/project-attachment-manager';
@@ -897,6 +899,10 @@ export async function bootServices(
     workspaceIdentity,
   });
   appScope.add(() => mcpServer.stop());
+  // Fork (ozimakov-st): PM task markers for the renderer (see ozdash-pm-task-store.ts).
+  const pmTaskStore = createPmTaskStore(db, log);
+  ipcMain.handle(OZDASH_PM_TASKS_CHANNEL, () => pmTaskStore.listInfos());
+  appScope.add(() => ipcMain.removeHandler(OZDASH_PM_TASKS_CHANNEL));
   return {
     account: accountService,
     automations: automationsService,

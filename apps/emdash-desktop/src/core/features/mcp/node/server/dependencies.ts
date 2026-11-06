@@ -16,6 +16,7 @@ import type {
 import type { TelemetryService } from '@core/primitives/telemetry/api/telemetry';
 import type { AppDb } from '@core/services/app-db/node/db';
 import type { AppSettingsService } from '@core/services/settings/node';
+import type { PmTaskStore } from './ozdash-pm-task-store';
 
 /**
  * Everything the Emdash MCP tools need, injected from the boot composition root.
@@ -38,6 +39,8 @@ export type McpToolDependencies = Readonly<{
   appVersion: string;
   /** Starts a task's initial conversation once its workspace is provisioned. */
   startInitialConversation: StartInitialConversation;
+  /** Fork (ozimakov-st): PM task markers; defaults to the app db's kv table. */
+  pmTasks?: PmTaskStore;
 }>;
 
 /** The projects wire controller's `inspectProjectPath` and `createProject`. */

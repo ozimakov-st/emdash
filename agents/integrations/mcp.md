@@ -140,6 +140,16 @@ Behavior:
 - `create_task` refuses, before creating anything, what the new-task modal would block or
   silently drop: a new branch name that already exists locally, and a prompt for a terminal
   provider whose prompt delivery is not `argv` or `stdin-pipe`
+- fork (ozimakov-st): `create_task` takes an optional `pmTask`
+  (`{ id, title?, managerTaskId? }`: `id` 1-32 chars, `title` up to 200, `managerTaskId`
+  is the Emdash task id of the PM session). It is stored in the `kv` table (namespace
+  `ozdash-pm-task`, keyed by Emdash task id, no migration), written just before the task
+  row so the sidebar never sees the task unmarked. `create_task` echoes it back,
+  `list_tasks` items and `get_task_status` carry `pmTask` (or null), and `delete_task`
+  removes it. The renderer reads all entries over the `ozdash:list-pm-tasks` invoke
+  channel (`window.ozdash.listPmTasks`), which also resolves the manager task and prunes
+  entries whose task is gone. The sidebar row shows a clipboard icon and `#<id>`; the task
+  header shows a `PM #<id>` chip that opens the manager task.
 - ACP startup calls `startSession` with `mode: 'resume'`; `attach` only creates a suspended
   handle and does not start an agent
 - tool errors are summarized for the caller and logged in full; internal messages
