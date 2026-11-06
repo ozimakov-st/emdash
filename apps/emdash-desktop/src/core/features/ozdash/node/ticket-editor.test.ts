@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addChildTaskContent,
+  addDependencyRow,
   appendLogLine,
   restoreTicketContent,
   setFrontmatterValue,
@@ -129,5 +131,124 @@ describe('ticket edits', () => {
         '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: PM session task-9 started in OZdash\n'
       );
     expect(result.content).toBe(expected);
+  });
+});
+
+describe('addDependencyRow', () => {
+  const HEADER =
+    '| # | Kind | What | Ref | Owner | Status | Last checked | Next check |\n' +
+    '|---|------|------|-----|-------|--------|--------------|------------|\n';
+  const cells = (id: string) => [id, 'child', 'x', 'r', 'agent', 'working', '2026-11-06', ''];
+
+  it('numbers the row after the highest D number and keeps every other byte', () => {
+    const before = `---\nid: 1\n---\n\n## Dependencies\n${HEADER}| D1 | slack | a | | Ann | done | | |\n| D3 | pr | b | | x | open | | |\n\n## People\n- Ann\n`;
+    const result = addDependencyRow(before, cells);
+    if (!result.success) throw new Error(result.error);
+    const row = '| D4 | child | x | r | agent | working | 2026-11-06 | |\n';
+    const at = before.indexOf('\n## People');
+    expect(result.content).toBe(
+      before.slice(0, at) + row.replace(/\n$/, '') + '\n' + before.slice(at)
+    );
+    expect(result.content.replace(row, '')).toBe(before);
+  });
+
+  it('adds the header when the section has no table', () => {
+    const before = '## Goal\nG\n\n## Dependencies\n\n## People\n';
+    const result = addDependencyRow(before, cells);
+    expect(result.success && result.content).toBe(
+      `## Goal\nG\n\n## Dependencies\n${HEADER}| D1 | child | x | r | agent | working | 2026-11-06 | |\n\n## People\n`
+    );
+  });
+
+  it('keeps notes in the section and puts the table after them', () => {
+    const before = '## Dependencies\nNone yet.\n\n## Log\n';
+    const result = addDependencyRow(before, cells);
+    expect(result.success && result.content).toBe(
+      `## Dependencies\nNone yet.\n\n${HEADER}| D1 | child | x | r | agent | working | 2026-11-06 | |\n\n## Log\n`
+    );
+  });
+
+  it('adds the section before People when it is missing', () => {
+    const before = '## Plan\n- [ ] 1. x\n\n## People\n\n## Log\n';
+    const result = addDependencyRow(before, cells);
+    expect(result.success && result.content).toBe(
+      `## Plan\n- [ ] 1. x\n\n## Dependencies\n${HEADER}| D1 | child | x | r | agent | working | 2026-11-06 | |\n\n## People\n\n## Log\n`
+    );
+  });
+
+  it('escapes pipes and keeps CRLF line endings', () => {
+    const before = '## Dependencies\r\n| # | What |\r\n|---|---|\r\n\r\n## Log\r\n';
+    const result = addDependencyRow(before, (id) => [id, 'a | b\nc']);
+    expect(result.success && result.content).toBe(
+      '## Dependencies\r\n| # | What |\r\n|---|---|\r\n| D1 | a \\| b c |\r\n\r\n## Log\r\n'
+    );
+  });
+
+  it('keeps a file without a final newline that way', () => {
+    const before = `## Dependencies\n${HEADER}| D2 | x | | | | | | |`;
+    const result = addDependencyRow(before, cells);
+    expect(result.success && result.content).toBe(
+      `${before}\n| D3 | child | x | r | agent | working | 2026-11-06 | |`
+    );
+  });
+});
+
+describe('addChildTaskContent', () => {
+  it('adds the child row, updates `updated:` and appends the Log line', () => {
+    const before = `---
+id: 12
+title: T
+status: active
+updated: 2026-10-20
+---
+
+## Dependencies
+| # | Kind | What | Ref | Owner | Status | Last checked | Next check |
+|---|------|------|-----|-------|--------|--------------|------------|
+| D1 | slack | ADR | https://x | Ann | waiting | 2026-11-02 | |
+
+## People
+
+## Log
+- 2026-10-01 10:00: Created.
+`;
+    const result = addChildTaskContent(
+      before,
+      {
+        taskId: 'task-1',
+        taskName: 'scim-sync',
+        projectName: 'token-server',
+        promptLine: 'Add the group sync endpoint',
+      },
+      NOW
+    );
+    expect(result.success && result.content).toBe(`---
+id: 12
+title: T
+status: active
+updated: 2026-11-06
+---
+
+## Dependencies
+| # | Kind | What | Ref | Owner | Status | Last checked | Next check |
+|---|------|------|-----|-------|--------|--------------|------------|
+| D1 | slack | ADR | https://x | Ann | waiting | 2026-11-02 | |
+| D2 | child | scim-sync: Add the group sync endpoint | emdash: task-1 (scim-sync) | agent | working | 2026-11-06 | |
+
+## People
+
+## Log
+- 2026-10-01 10:00: Created.
+- 2026-11-06 09:05: Oleg linked OZdash task scim-sync (token-server) to this ticket
+`);
+  });
+
+  it('uses only the task name when the prompt was empty', () => {
+    const result = addChildTaskContent(
+      '---\nid: 1\n---\n',
+      { taskId: 't', taskName: 'n', projectName: 'p', promptLine: '' },
+      NOW
+    );
+    expect(result.success && result.content).toContain('| D1 | child | n | emdash: t (n) |');
   });
 });

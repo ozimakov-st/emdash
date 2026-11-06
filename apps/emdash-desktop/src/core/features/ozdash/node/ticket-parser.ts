@@ -84,6 +84,12 @@ function parseSections(lines: readonly string[]): Map<string, string[]> {
   return sections;
 }
 
+/** A section's text without leading/trailing blank lines, or null when empty. */
+function sectionText(lines: readonly string[]): string | null {
+  const text = lines.join('\n').trim();
+  return text || null;
+}
+
 const UNCHECKED = /^\s*[-*+]\s+\[ \]\s+(.*\S)\s*$/;
 
 function firstUncheckedPlanLine(lines: readonly string[]): string | null {
@@ -167,6 +173,7 @@ export function parseTicket(content: string, folder: string): ParseTicketResult 
       pmSession: fields.get('pm_session') || null,
       updated: fields.get('updated') || null,
       folder,
+      goal: sectionText(sections.get('goal') ?? []),
       nextStep: firstUncheckedPlanLine(sections.get('plan') ?? []),
       waitingOn: openDependencies(sections.get('dependencies') ?? []),
       openQuestions: openQuestions(sections.get('questions for oleg') ?? []),

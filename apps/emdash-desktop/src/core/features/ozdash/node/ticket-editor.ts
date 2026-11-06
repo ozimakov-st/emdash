@@ -160,3 +160,132 @@ export function setPmSessionContent(content: string, taskId: string, now: Date):
       appendLogLine(text, `- ${formatDateTime(now)}: PM session ${taskId} started in OZdash`),
   ]);
 }
+
+const DEPENDENCIES_TABLE_HEADER = [
+  '| # | Kind | What | Ref | Owner | Status | Last checked | Next check |',
+  '|---|------|------|-----|-------|--------|--------------|------------|',
+];
+/** Sections that follow `## Dependencies` in the template; a new one goes before them. */
+const SECTIONS_AFTER_DEPENDENCIES = /^##\s+(People|Questions for Oleg|Decisions|Log)\s*$/i;
+
+/** A markdown table cell: one line, pipes escaped. */
+export function tableCell(text: string): string {
+  return text.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
+}
+
+function isTableLine(text: string): boolean {
+  return text.trim().startsWith('|');
+}
+
+/**
+ * Adds one row to the `## Dependencies` table. `row` gets the next number (`D<n>`,
+ * n = highest existing D number + 1) and returns the cells. Adds the table header,
+ * or the whole section, when missing.
+ */
+export function addDependencyRow(content: string, row: (id: string) => string[]): EditResult {
+  const lines = toLines(content);
+  const eol = defaultEol(lines);
+  const line = (text: string): Line => ({ text, eol });
+  const heading = lines.findIndex((entry) => /^##\s+Dependencies\s*$/i.test(entry.text));
+
+  let sectionEnd = lines.length;
+  let tableStart = -1;
+  let tableEnd = -1;
+  let maxNumber = 0;
+  if (heading >= 0) {
+    for (let index = heading + 1; index < lines.length; index += 1) {
+      if (/^#{1,2}\s/.test(lines[index]!.text)) {
+        sectionEnd = index;
+        break;
+      }
+    }
+    for (let index = heading + 1; index < sectionEnd; index += 1) {
+      const text = lines[index]!.text;
+      if (!isTableLine(text)) {
+        if (tableStart >= 0) break; // Only the first table.
+        continue;
+      }
+      if (tableStart < 0) tableStart = index;
+      tableEnd = index;
+      const first = /^\s*\|\s*D(\d+)\s*\|/i.exec(text);
+      if (first) maxNumber = Math.max(maxNumber, Number(first[1]));
+    }
+  }
+  const cells = row(`D${maxNumber + 1}`).map(tableCell);
+  const rowLine = line(`|${cells.map((cell) => (cell ? ` ${cell} ` : ' ')).join('|')}|`);
+
+  if (tableEnd >= 0) {
+    const last = lines[tableEnd]!;
+    const wasLastLine = last.eol === '';
+    if (wasLastLine) last.eol = eol;
+    lines.splice(tableEnd + 1, 0, { text: rowLine.text, eol: wasLastLine ? '' : last.eol });
+    return { success: true, content: fromLines(lines) };
+  }
+
+  const table = [...DEPENDENCIES_TABLE_HEADER.map(line), rowLine];
+  if (heading >= 0) {
+    // After the last non-blank line of the section (the heading when it is empty).
+    let lastContent = heading;
+    for (let index = heading + 1; index < sectionEnd; index += 1) {
+      if (lines[index]!.text.trim() !== '') lastContent = index;
+    }
+    const previous = lines[lastContent]!;
+    const block = lastContent === heading ? table : [line(''), ...table];
+    if (previous.eol === '') {
+      // The file ended here without a newline: keep it that way.
+      previous.eol = eol;
+      block[block.length - 1]!.eol = '';
+    }
+    lines.splice(lastContent + 1, 0, ...block);
+    return { success: true, content: fromLines(lines) };
+  }
+
+  // No section: add one before People / Questions / Decisions / Log, else at the end.
+  const before = lines.findIndex((entry) => SECTIONS_AFTER_DEPENDENCIES.test(entry.text));
+  const section = [line('## Dependencies'), ...table, line('')];
+  if (before >= 0) {
+    lines.splice(before, 0, ...section);
+  } else {
+    const last = lines[lines.length - 1];
+    if (last && last.eol === '') last.eol = eol;
+    if (last && last.text.trim() !== '') lines.push(line(''));
+    lines.push(...section.slice(0, -1));
+  }
+  return { success: true, content: fromLines(lines) };
+}
+
+export type ChildTaskLink = {
+  taskId: string;
+  taskName: string;
+  projectName: string;
+  /** The first line of the user's prompt (already shortened), or empty. */
+  promptLine: string;
+};
+
+/**
+ * Records a task Oleg created from the ticket in OZdash: a `child` Dependencies row,
+ * today's `updated:`, and a Log line.
+ */
+export function addChildTaskContent(content: string, link: ChildTaskLink, now: Date): EditResult {
+  const today = formatDate(now);
+  const what = link.promptLine ? `${link.taskName}: ${link.promptLine}` : link.taskName;
+  return chain(content, [
+    (text) =>
+      addDependencyRow(text, (id) => [
+        id,
+        'child',
+        what,
+        `emdash: ${link.taskId} (${link.taskName})`,
+        'agent',
+        'working',
+        today,
+        '',
+      ]),
+    (text) => setFrontmatterValue(text, 'updated', today),
+    (text) =>
+      appendLogLine(
+        text,
+        `- ${formatDateTime(now)}: Oleg linked OZdash task ${link.taskName} (${link.projectName}) to this ticket`
+      ),
+  ]);
+}

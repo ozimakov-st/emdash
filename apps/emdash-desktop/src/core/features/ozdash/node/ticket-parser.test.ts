@@ -53,6 +53,7 @@ describe('parseTicket', () => {
       pmSession: '0f3c9a12-aaaa',
       updated: '2026-11-03',
       folder: '123-add-scim',
+      goal: 'Sync groups.',
     });
   });
 

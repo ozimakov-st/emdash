@@ -1,4 +1,8 @@
 import { useCallback, useRef } from 'react';
+import {
+  linkOzTicketTask,
+  prepareOzTicketTask,
+} from '@core/features/ozdash/api/browser/oz-tickets-integration';
 import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
 import type { InitialConversationState } from '@core/features/tasks/contributions/browser/task-config/initial-conversation-section';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
@@ -39,6 +43,18 @@ export function useCreateTaskCallback({
       return;
     }
     const id = crypto.randomUUID();
+    const linkedIssue = state.linkedType === 'issue' ? (state.linkedIssue ?? undefined) : undefined;
+    // Fork (ozimakov-st): a task based on an OZ ticket gets the ticket block in its
+    // prompt, and is recorded in the ticket once it exists.
+    const ozTicket = prepareOzTicketTask({
+      linkedIssue,
+      conversation: buildInitialConversation(initialConversation),
+      initialPromptSupported: initialConversation.initialPromptSupported,
+      taskId: id,
+      taskName: state.taskName.effectiveTaskName,
+      projectId: selectedProjectId,
+      prompt: initialConversation.prompt,
+    });
     void taskManager
       .createTask({
         id,
@@ -46,12 +62,13 @@ export function useCreateTaskCallback({
         taskConfig: {
           version: '1',
           name: state.taskName.effectiveTaskName,
-          linkedIssue: state.linkedType === 'issue' ? (state.linkedIssue ?? undefined) : undefined,
+          linkedIssue,
           initialStatus: deriveInitialStatus(state.linkedType, state.linkedPR),
-          initialConversation: buildInitialConversation(initialConversation),
+          initialConversation: ozTicket.conversation,
         },
         workspaceConfig: state.workspaceConfig.resolvedConfig,
       })
+      .then(() => linkOzTicketTask(ozTicket.link))
       .catch((e) => log.error('create task failed', e));
 
     navigate(taskViewDef({ projectId: selectedProjectId, taskId: id }));

@@ -12,7 +12,8 @@ const seen = new Set<string>();
 let pending: Promise<void> | null = null;
 let refreshAgain = false;
 
-function refreshTaskTickets(): void {
+/** Reads the markers again (for example after a task was linked to a ticket). */
+export function refreshTaskTickets(): void {
   const list = (globalThis as { ozdash?: OzdashBridge }).ozdash?.listTaskTickets;
   if (!list) return;
   if (pending) {

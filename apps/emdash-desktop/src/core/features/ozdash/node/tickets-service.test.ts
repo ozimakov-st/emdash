@@ -84,6 +84,37 @@ describe('tickets service', () => {
     ]);
   });
 
+  it('finds a ticket by id and records a linked task in it, then syncs', async () => {
+    write('8-x', ticketText('8', 'active', 'pm-8'));
+    const service = createTicketsService({
+      vaultPath: vault,
+      logger,
+      run,
+      now: () => NOW,
+      createPmSession: vi.fn(),
+      pmSessionExists: vi.fn(),
+    });
+    expect((await service.findTicket('8'))?.folder).toBe('8-x');
+    expect(await service.findTicket('80')).toBeNull();
+
+    const link = { taskId: 't-1', taskName: 'child', projectName: 'repo', promptLine: 'Do it' };
+    expect(await service.linkChildTask('8-x', link)).toEqual({ success: true });
+    expect(read('8-x')).toBe(
+      ticketText('8', 'active', 'pm-8')
+        .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+        .replace(
+          '\n## Log\n',
+          '\n## Dependencies\n' +
+            '| # | Kind | What | Ref | Owner | Status | Last checked | Next check |\n' +
+            '|---|------|------|-----|-------|--------|--------------|------------|\n' +
+            '| D1 | child | child: Do it | emdash: t-1 (child) | agent | working | 2026-11-06 | |\n' +
+            '\n## Log\n'
+        )
+        .concat('- 2026-11-06 09:05: Oleg linked OZdash task child (repo) to this ticket\n')
+    );
+    expect(gitCalls).toContain('push');
+  });
+
   it('refuses to restore an open ticket or a path outside tickets/', async () => {
     write('6-open', ticketText('6', 'active'));
     const service = createTicketsService({

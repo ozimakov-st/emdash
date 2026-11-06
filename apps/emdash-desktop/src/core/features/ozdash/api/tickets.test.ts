@@ -19,6 +19,7 @@ function ticket(overrides: Partial<TicketSummary>): TicketSummary {
     pmSession: null,
     updated: '2026-11-01',
     folder: `${overrides.id ?? '1'}-ticket`,
+    goal: null,
     nextStep: null,
     waitingOn: [],
     openQuestions: { count: 0, first: null },

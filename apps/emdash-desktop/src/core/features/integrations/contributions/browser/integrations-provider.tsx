@@ -12,6 +12,7 @@ import type {
 } from '@core/features/integrations/api/contract';
 import type { IntegrationFormInput } from '@core/features/integrations/browser/types';
 import { getIssuesClient } from '@core/features/issues/api/browser/client';
+import { OZ_TICKETS_INTEGRATION } from '@core/features/ozdash/api/browser/oz-tickets-integration';
 import type { ConnectionStatus } from '@core/primitives/issue-providers/api';
 import { registerIssueMentionIcons } from '@core/primitives/issues/browser/issue-mention-icons';
 import type { ProviderAccountsByProvider } from '@core/primitives/provider-accounts/api';
@@ -78,7 +79,8 @@ export function IntegrationsProvider({ children }: { children: React.ReactNode }
   });
 
   useEffect(() => {
-    registerIssueMentionIcons(integrations);
+    // Fork (ozimakov-st): OZ Tickets is an issue source without a plugin.
+    registerIssueMentionIcons([...integrations, OZ_TICKETS_INTEGRATION]);
   }, [integrations]);
 
   const { data: statusData, isFetching: isCheckingConnections } = useQuery({
@@ -190,10 +192,10 @@ export function IntegrationsProvider({ children }: { children: React.ReactNode }
   const integrationById = useMemo(
     () =>
       Object.fromEntries(
-        integrations.map((integration: IntegrationProviderDescriptor) => [
-          integration.id,
-          integration,
-        ])
+        // Fork (ozimakov-st): name and icon of OZ Tickets for the issue pickers.
+        [...integrations, OZ_TICKETS_INTEGRATION].map(
+          (integration: IntegrationProviderDescriptor) => [integration.id, integration]
+        )
       ),
     [integrations]
   );

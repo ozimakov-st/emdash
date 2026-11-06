@@ -10,7 +10,9 @@ export type IssueProviderRegistry = {
 };
 
 export function createIssueProviderRegistry(
-  dependencies: PluginIssueProviderDependencies
+  dependencies: PluginIssueProviderDependencies,
+  /** Fork (ozimakov-st): providers that are not plugins (OZ Tickets). */
+  extraProviders: readonly IssueProvider[] = []
 ): IssueProviderRegistry {
   const providers = new Map<IssueProviderType, IssueProvider>();
 
@@ -18,6 +20,7 @@ export function createIssueProviderRegistry(
     const provider = createPluginIssueProvider(plugin, dependencies);
     providers.set(provider.type, provider);
   }
+  for (const provider of extraProviders) providers.set(provider.type, provider);
 
   return {
     get: (type) => providers.get(type),

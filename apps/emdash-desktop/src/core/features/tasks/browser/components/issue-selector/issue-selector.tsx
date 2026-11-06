@@ -15,6 +15,7 @@ import {
 import { ProviderAccountStateEmpty } from '@core/features/integrations/contributions/browser/account-state';
 import { IntegrationIcon } from '@core/features/integrations/contributions/browser/integration-icon';
 import { useIntegrationsContext } from '@core/features/integrations/contributions/browser/integrations-provider';
+import { withOzTicketsProvider } from '@core/features/ozdash/api/browser/oz-tickets-integration';
 import { settingsViewDef } from '@core/features/settings/contributions/views';
 import { openExternal } from '@core/primitives/desktop-host/browser/host-client';
 import { linkedIssueDisplayIdentifier, type LinkedIssue } from '@core/primitives/linked-issues/api';
@@ -142,7 +143,11 @@ export const IssueSelector = observer(function IssueSelector({
   const linkedIssueMap = getLinkedIssueMap(projectId, excludeTaskId);
   const { integrationById, integrations } = useIntegrationsContext();
   const issueProviderOrder = useMemo(
-    () => integrations.filter(isIssueIntegration).map((integration) => integration.id),
+    // Fork (ozimakov-st): plus OZ Tickets.
+    () =>
+      withOzTicketsProvider(
+        integrations.filter(isIssueIntegration).map((integration) => integration.id)
+      ),
     [integrations]
   );
   const {

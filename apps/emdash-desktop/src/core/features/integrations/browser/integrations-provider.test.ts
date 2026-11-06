@@ -24,6 +24,13 @@ const mocks = vi.hoisted(() => ({
   listAccounts: vi.fn(),
 }));
 
+// Fork (ozimakov-st): these tests cover the plugin providers only; OZ Tickets (always
+// added) is tested in ozdash/api/browser/oz-tickets-integration.test.ts.
+vi.mock('@core/features/ozdash/api/browser/oz-tickets-integration', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isOzTicketsProvider: () => false,
+  withOzTicketsProvider: (providers: string[]) => providers,
+}));
 vi.mock('@core/features/issues/api/browser/client', () => ({
   getIssuesClient: async () => ({
     checkAllConnections: mocks.checkAllConnections,

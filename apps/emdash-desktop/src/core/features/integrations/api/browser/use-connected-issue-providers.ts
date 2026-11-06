@@ -3,6 +3,10 @@ import { useObserver } from 'mobx-react-lite';
 import { useMemo } from 'react';
 import { isIssueIntegration } from '@core/features/integrations/api/browser/integration-display';
 import { useIntegrationsContext } from '@core/features/integrations/contributions/browser/integrations-provider';
+import {
+  isOzTicketsProvider,
+  withOzTicketsProvider,
+} from '@core/features/ozdash/api/browser/oz-tickets-integration';
 import { getProjectSettingsStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import type { IssueProviderType } from '@core/primitives/issue-providers/api';
 import { resolveProviderAccount } from '@core/primitives/project-settings/api';
@@ -31,6 +35,8 @@ export function useConnectedIssueProviders(
 
   const checkUsable = useMemo(
     () => (provider: IssueProviderType) => {
+      // Fork (ozimakov-st): OZ Tickets needs no account.
+      if (isOzTicketsProvider(provider)) return true;
       const choice = projectChoices?.[provider];
       if (choice?.kind === 'none') return false;
 
@@ -66,10 +72,12 @@ export function useConnectedIssueProviders(
 
   const connectedProviders = useMemo(
     () =>
-      integrations
-        .filter(isIssueIntegration)
-        .map((integration) => integration.id)
-        .filter(checkUsable),
+      withOzTicketsProvider(
+        integrations
+          .filter(isIssueIntegration)
+          .map((integration) => integration.id)
+          .filter(checkUsable)
+      ),
     [checkUsable, integrations]
   );
 

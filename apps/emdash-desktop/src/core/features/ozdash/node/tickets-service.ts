@@ -13,7 +13,13 @@ import {
   type TicketList,
   type TicketSummary,
 } from '../api/tickets';
-import { restoreTicketContent, setPmSessionContent, type EditResult } from './ticket-editor';
+import {
+  addChildTaskContent,
+  restoreTicketContent,
+  setPmSessionContent,
+  type ChildTaskLink,
+  type EditResult,
+} from './ticket-editor';
 import { parseTicket } from './ticket-parser';
 import { pullVault, resolveVaultRepo, runGit, syncVault, type GitRunner } from './vault-sync';
 
@@ -84,6 +90,10 @@ export interface TicketsService {
   list(): Promise<TicketList>;
   restore(folder: string): Promise<TicketActionResult>;
   openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
+  /** The ticket with this id, or null. */
+  findTicket(ticketId: string): Promise<TicketSummary | null>;
+  /** Adds a `child` Dependencies row and a Log line for a task created from the ticket. */
+  linkChildTask(folder: string, link: ChildTaskLink): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
 }
@@ -209,6 +219,21 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
               ? restoreTicketContent(content, now())
               : { success: false, error: `Ticket #${ticket.id} is not archived` },
           (ticket) => `tickets: restore #${ticket.id} from archive (OZdash)`
+        )
+      );
+    },
+
+    async findTicket(ticketId) {
+      const list = await readTickets(vaultPath);
+      return list.tickets.find((ticket) => ticket.id === ticketId) ?? null;
+    },
+
+    linkChildTask(folder, link) {
+      return serialize(() =>
+        editAndSync(
+          folder,
+          (content) => addChildTaskContent(content, link, now()),
+          (ticket) => `tickets: link OZdash task ${link.taskName} to #${ticket.id}`
         )
       );
     },

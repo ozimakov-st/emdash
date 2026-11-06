@@ -19,6 +19,8 @@ export const issueProviderIdSchema = z.enum([
   'notion',
   'trello',
   'youtrack',
+  // Fork (ozimakov-st): Oleg's vault tickets (see core/features/ozdash/api/ticket-issues.ts).
+  'oz-tickets',
 ]);
 
 const v0Schema = z.object({

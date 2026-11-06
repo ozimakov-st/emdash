@@ -5,6 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useConnectedIssueProviders } from './use-connected-issue-providers';
 
 const mocks = vi.hoisted(() => ({ context: vi.fn(), settings: vi.fn() }));
+// Fork (ozimakov-st): these tests cover the plugin providers only; OZ Tickets (always
+// added) is tested in ozdash/api/browser/oz-tickets-integration.test.ts.
+vi.mock('@core/features/ozdash/api/browser/oz-tickets-integration', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isOzTicketsProvider: () => false,
+  withOzTicketsProvider: (providers: string[]) => providers,
+}));
 vi.mock('@core/features/integrations/contributions/browser/integrations-provider', () => ({
   useIntegrationsContext: mocks.context,
 }));

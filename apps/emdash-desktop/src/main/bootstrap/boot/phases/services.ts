@@ -169,7 +169,7 @@ import { setBrowserCorsRelaxationSettings } from '@main/host/browser/browser-pro
 import { browserWebContentsRegistry } from '@main/host/browser/browser-webcontents-registry';
 import { HostAttachmentRegistry } from '@main/host/host-attachment-registry';
 import { createSystemNotificationSink } from '@main/host/notifications/system-notification-sink';
-import { registerOzdashTickets } from '@main/host/ozdash-tickets';
+import { createOzdashTicketsIssueProvider, registerOzdashTickets } from '@main/host/ozdash-tickets';
 import { encryptedAppSecretsStore } from '@main/host/secrets/encrypted-app-secrets-store';
 import { toPlaintextSecretStore } from '@main/host/secrets/plaintext-secret-store';
 import { setTrayVisible } from '@main/host/tray';
@@ -610,7 +610,10 @@ export async function bootServices(
     channels: gitCredentialServer,
     logger: log,
   });
-  const issueProviders = createIssueProviderRegistry({ resolveProjectIntegrationAccount });
+  const issueProviders = createIssueProviderRegistry({ resolveProjectIntegrationAccount }, [
+    // Fork (ozimakov-st): Oleg's vault tickets as an issue source.
+    createOzdashTicketsIssueProvider(),
+  ]);
   const pullRequestsRegistration = new PullRequestsRegistration({
     getClient: getPullRequestsRuntimeClient,
     onResume: (handler) => {

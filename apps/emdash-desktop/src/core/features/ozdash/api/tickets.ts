@@ -1,6 +1,7 @@
 // Fork (ozimakov-st): Oleg's tickets (PM-managed work items) as the Tickets board
 // shows them. The main process reads them from the vault
 // (`~/Projects/work/vault/tickets/<id>-<slug>/ticket.md`); see ozdash/node.
+import type { LinkTicketTaskInput, LinkTicketTaskResult } from './ticket-issues';
 
 export const TICKET_STATUSES = [
   'draft',
@@ -25,6 +26,8 @@ export type TicketSummary = {
   updated: string | null;
   /** The ticket's folder name under `tickets/`, for example `123-add-scim`. */
   folder: string;
+  /** The `## Goal` text (trimmed), or null when empty. */
+  goal: string | null;
   /** The first unchecked Plan line. */
   nextStep: string | null;
   /** Open Dependencies rows. */
@@ -56,6 +59,7 @@ export const OZDASH_TICKETS_CHANNELS = {
   list: 'ozdash:list-tickets',
   restore: 'ozdash:restore-ticket',
   openSession: 'ozdash:open-ticket-session',
+  linkTask: 'ozdash:link-ticket-task',
   changed: 'ozdash:tickets-changed',
 } as const;
 
@@ -65,6 +69,8 @@ export type OzdashTicketsBridge = {
   onTicketsChanged(callback: (list: TicketList) => void): () => void;
   restoreTicket(folder: string): Promise<TicketActionResult>;
   openTicketSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
+  /** After a task was created from a ticket (see ticket-issues.ts). */
+  linkTicketTask(input: LinkTicketTaskInput): Promise<LinkTicketTaskResult>;
 };
 
 export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'draft' | 'archive';

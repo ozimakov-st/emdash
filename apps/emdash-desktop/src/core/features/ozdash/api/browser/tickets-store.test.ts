@@ -13,6 +13,7 @@ function ticket(id: string, pmSession: string | null): TicketSummary {
     pmSession,
     updated: null,
     folder: `${id}-t`,
+    goal: null,
     nextStep: null,
     waitingOn: [],
     openQuestions: { count: 0, first: null },

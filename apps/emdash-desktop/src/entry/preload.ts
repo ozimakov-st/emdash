@@ -53,4 +53,5 @@ contextBridge.exposeInMainWorld('ozdash', {
   restoreTicket: (folder: string) => ipcRenderer.invoke('ozdash:restore-ticket', folder),
   openTicketSession: (folder: string, projectId: string) =>
     ipcRenderer.invoke('ozdash:open-ticket-session', folder, projectId),
+  linkTicketTask: (input: unknown) => ipcRenderer.invoke('ozdash:link-ticket-task', input),
 });
