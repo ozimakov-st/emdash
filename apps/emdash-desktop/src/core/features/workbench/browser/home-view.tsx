@@ -63,6 +63,7 @@ export function HomeMainPanel() {
               height={32}
               color={isDark ? 'var(--color-background-2)' : 'var(--color-foreground)'}
               shimmerColor={isDark ? 'white' : 'var(--color-foreground-passive)'}
+              accentColor={isDark ? '#34D399' : '#10B981'}
             />
           </div>
         </div>

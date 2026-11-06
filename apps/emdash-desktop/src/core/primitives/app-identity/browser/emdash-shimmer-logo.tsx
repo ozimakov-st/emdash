@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import {
+  DASH_PATH,
   EMDASH_PATHS,
   NATURAL_HEIGHT,
   NATURAL_WIDTH,
@@ -10,11 +11,14 @@ export function EmdashShimmerLogo({
   height = NATURAL_HEIGHT,
   color = 'currentColor',
   shimmerColor = 'white',
+  accentColor,
 }: {
   className?: string;
   height?: number;
   color?: string;
   shimmerColor?: string;
+  /** Fork (ozimakov-st): color of the dash (OZdash emerald), else the shimmer fill. */
+  accentColor?: string;
 }) {
   const uid = useId();
   const gradientId = `logo-shimmer-${uid.replace(/:/g, '')}`;
@@ -26,7 +30,7 @@ export function EmdashShimmerLogo({
     <svg
       width={width}
       height={height}
-      viewBox="0 0 499 70"
+      viewBox={`0 0 ${NATURAL_WIDTH} ${NATURAL_HEIGHT}`}
       fill={`url(#${gradientId})`}
       className={className}
       xmlns="http://www.w3.org/2000/svg"
@@ -35,7 +39,7 @@ export function EmdashShimmerLogo({
         <linearGradient
           id={gradientId}
           gradientUnits="userSpaceOnUse"
-          x1="-499"
+          x1={-NATURAL_WIDTH}
           y1="-144"
           x2="0"
           y2="144"
@@ -49,7 +53,7 @@ export function EmdashShimmerLogo({
             <animateTransform
               attributeName="gradientTransform"
               type="translate"
-              values="0 0; 998 0; 998 0"
+              values={`0 0; ${NATURAL_WIDTH * 2} 0; ${NATURAL_WIDTH * 2} 0`}
               keyTimes="0; 0.9; 1"
               dur="7s"
               repeatCount="indefinite"
@@ -58,7 +62,7 @@ export function EmdashShimmerLogo({
         </linearGradient>
       </defs>
       {EMDASH_PATHS.map((d) => (
-        <path key={d.slice(0, 8)} d={d} />
+        <path key={d.slice(0, 8)} d={d} fill={d === DASH_PATH ? accentColor : undefined} />
       ))}
     </svg>
   );

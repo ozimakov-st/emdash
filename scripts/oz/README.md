@@ -22,3 +22,9 @@ and then sync the vault repo (add, commit, pull --rebase --autostash, push).
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
   originals. Run with `swift <script> <upstream png> <out png>`. Make the `.icns`
   with `sips` + `iconutil` (sizes 16 to 1024).
+- Branding: `make-branding.sh` rebuilds the OZdash wordmark (`ozdash-wordmark.py` ->
+  `ozdash-wordmark.svg`), the DMG background (`dmg-background.py` ->
+  `build/dmg-background.tiff`, 1x + 2x) and the dev-build icon (`icon-dev.swift` ->
+  `emdash-dev.png`). Needs `rsvg-convert` (`brew install librsvg`). The wordmark paths in
+  `emdash-logo.tsx` and the boot splash in `renderer/index.html` come from
+  `python3 scripts/oz/ozdash-wordmark.py --paths`.
