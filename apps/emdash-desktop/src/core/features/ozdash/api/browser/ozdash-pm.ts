@@ -71,3 +71,17 @@ export function getPmProjectPath(): string | null {
 export function isPmProjectInWindow(project: ProjectLike | null | undefined): boolean {
   return isPmProject(project, getPmProjectPath());
 }
+
+/** What "new task" creates in a project: a ticket (and its PM session) in the PM project. */
+export type NewTaskKind = 'ticket' | 'task';
+
+export function newTaskKind(
+  project: ProjectLike | null | undefined,
+  pmPath: string | null
+): NewTaskKind {
+  return isPmProject(project, pmPath) ? 'ticket' : 'task';
+}
+
+export function newTaskKindInWindow(project: ProjectLike | null | undefined): NewTaskKind {
+  return newTaskKind(project, getPmProjectPath());
+}

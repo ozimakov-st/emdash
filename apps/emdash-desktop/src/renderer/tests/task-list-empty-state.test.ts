@@ -27,6 +27,8 @@ vi.mock('@core/features/integrations/api/browser/use-connected-issue-providers',
 }));
 vi.mock('@core/features/projects/api/browser/stores/project-selectors', () => ({
   getProjectViewStore: () => ({ selectedIssueProvider: mocks.selectedProvider }),
+  // Fork (ozimakov-st): read to tell the PM project apart (not the PM project here).
+  getProjectStore: () => undefined,
 }));
 vi.mock('@core/features/projects/contributions/browser/project-availability-ui', () => ({
   projectAvailabilityUiContribution: {},

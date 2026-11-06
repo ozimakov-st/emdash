@@ -1,6 +1,8 @@
 import { toast } from '@emdash/ui/react/primitives';
 import { useLayoutEffect, type ReactNode } from 'react';
 import { captureDevPerfTrace } from '@core/features/dev-perf/api/browser/capture-trace';
+import { newTaskKindInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
+import { getProjectStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { toggleAppTheme } from '@core/features/settings/api/browser/theme-toggle';
 import {
@@ -58,6 +60,11 @@ export function WindowScope({ children }: { readonly children: ReactNode }) {
                 projectAvailabilityUi.defaultLiveActionDisabledReason
             );
       },
+      // Fork (ozimakov-st): in the PM project the task modal shows the ticket form.
+      presentation: () =>
+        currentProjectId && newTaskKindInWindow(getProjectStore(currentProjectId)) === 'ticket'
+          ? { title: 'New Ticket', description: 'Create a ticket and start its PM session' }
+          : undefined,
       execute: (input) => {
         const projectId = input?.projectId ?? currentProjectId;
         if (projectId && taskHostActionAvailability(projectId).kind === 'enabled') {

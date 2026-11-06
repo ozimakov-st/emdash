@@ -121,6 +121,8 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
         projectAvailabilityUi.defaultLiveActionDisabledReason)
       : undefined;
   const navigateToProject = () => navigate(projectViewDef({ projectId }));
+  // Fork (ozimakov-st): in the PM project the "+" makes a ticket (see create-task-modal.tsx).
+  const newItemLabel = isPm ? 'New ticket' : 'New task';
 
   const renderSpinnerWithTooltip = () => {
     if (!isUnregisteredProject(project)) return null;
@@ -221,8 +223,8 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
                   type="button"
                   aria-label={
                     createDisabledReason
-                      ? `New task for ${projectLabel}. ${createDisabledReason}`
-                      : `New task for ${projectLabel}`
+                      ? `${newItemLabel} for ${projectLabel}. ${createDisabledReason}`
+                      : `${newItemLabel} for ${projectLabel}`
                   }
                   className={
                     'opacity-0 transition-opacity duration-150 group-hover/row:opacity-100'
@@ -241,7 +243,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
             <Tooltip.Content>
               {createDisabledReason ?? (
                 <>
-                  New Task
+                  {isPm ? 'New Ticket' : 'New Task'}
                   <BoundShortcut command="app.newTask" variant="keycaps" />
                 </>
               )}

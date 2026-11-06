@@ -16,6 +16,13 @@ The PM project opens on a **Tickets** board (code in
 updates when the files change. Click a card to open the ticket's PM session (or start
 one with `/oz-pm <id>`); archived tickets have a Restore button. Both write the ticket
 and then sync the vault repo (add, commit, pull --rebase --autostash, push).
+"New task…" on an open card starts a task for the ticket in another project.
+
+In the PM project, "new task" (sidebar "+", ⌘N, the board, the task list) is
+**New ticket**: it writes `vault/tickets/<id>-<slug>/ticket.md` (draft), starts the
+PM session task `ticket-<id>-<slug>` with `/oz-pm <id>`, and syncs once. A PM task
+that no ticket points to shows "no ticket"; its header chip can link it to a ticket
+or create a ticket for it.
 
 - Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has the same signature and macOS asks for keychain access only once.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of

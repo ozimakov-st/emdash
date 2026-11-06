@@ -7,6 +7,8 @@ import {
   preferredIssueProvider,
 } from '@core/features/integrations/api/browser/integration-display';
 import { useConnectedIssueProviders } from '@core/features/integrations/api/browser/use-connected-issue-providers';
+import { newTaskKindInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
+import { NewTicketForm } from '@core/features/ozdash/contributions/browser';
 import {
   firstAvailableProjectId,
   getProjectStore,
@@ -50,20 +52,32 @@ function useDefaultProjectId(propProjectId?: string): string | undefined {
   }, []); // computed once on mount
 }
 
-export const CreateTaskModal = observer(function CreateTaskModal({
+type CreateTaskModalProps = {
+  projectId?: string;
+  strategy?: CreateTaskStrategy;
+  initialPR?: PullRequest;
+  initialWorkspaceId?: string;
+  /** Fork (ozimakov-st): an issue to start with (the Tickets board's "New task"). */
+  initialIssue?: LinkedIssue;
+};
+
+/** Fork (ozimakov-st): in the PM project, "new task" is "New ticket" (see ozdash). */
+export const CreateTaskModal = observer(function CreateTaskModal(props: CreateTaskModalProps) {
+  const { complete, dismiss } = useModalController('taskModal');
+  const selectedProjectId = useDefaultProjectId(props.projectId);
+  if (selectedProjectId && newTaskKindInWindow(getProjectStore(selectedProjectId)) === 'ticket') {
+    return <NewTicketForm projectId={selectedProjectId} onDone={complete} onCancel={dismiss} />;
+  }
+  return <CreateTaskModalContent {...props} projectId={selectedProjectId} />;
+});
+
+const CreateTaskModalContent = observer(function CreateTaskModalContent({
   projectId,
   strategy: initialStrategy,
   initialPR,
   initialWorkspaceId,
   initialIssue,
-}: {
-  projectId?: string;
-  strategy?: CreateTaskStrategy;
-  initialPR?: PullRequest;
-  initialWorkspaceId?: string;
-  /** Fork (ozimakov-st): an issue to start with (the Tickets board's "New session"). */
-  initialIssue?: LinkedIssue;
-}) {
+}: CreateTaskModalProps) {
   const { complete } = useModalController('taskModal');
   const selectedProjectId = useDefaultProjectId(projectId);
 

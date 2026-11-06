@@ -1,13 +1,17 @@
 import { isGitHubDotComHost } from '@emdash/core/primitives/repository/api';
 import { menuItemBase } from '@emdash/ui/styles/recipes/menu-item';
-import { CircleDot, GitBranch, GitPullRequest, type LucideIcon } from 'lucide-react';
+import { CircleDot, GitBranch, GitPullRequest, Ticket, type LucideIcon } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import {
   issueTerms,
   preferredIssueProvider,
 } from '@core/features/integrations/api/browser/integration-display';
 import { useConnectedIssueProviders } from '@core/features/integrations/api/browser/use-connected-issue-providers';
-import { getProjectViewStore } from '@core/features/projects/api/browser/stores/project-selectors';
+import { newTaskKindInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
+import {
+  getProjectStore,
+  getProjectViewStore,
+} from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectAvailabilityUiContribution as projectAvailabilityUi } from '@core/features/projects/contributions/browser/project-availability-ui';
 import { settingsViewDef } from '@core/features/settings/contributions/views';
 import { getGitRepositoryStore } from '@core/features/source-control/api/browser/stores/source-control-selectors';
@@ -63,7 +67,7 @@ export const TaskListEmptyState = observer(function TaskListEmptyState({
         projectAvailabilityUi.defaultLiveActionDisabledReason)
       : undefined;
 
-  const actions: TaskAction[] = [
+  const taskActions: TaskAction[] = [
     {
       label: 'Create a Task from a Branch',
       description: 'Create a task from an existing branch',
@@ -96,6 +100,21 @@ export const TaskListEmptyState = observer(function TaskListEmptyState({
       onActivate: () => void openTaskModal({ projectId, strategy: 'from-pull-request' }),
     },
   ];
+  // Fork (ozimakov-st): in the PM project every task is a ticket's PM session, so the
+  // only action is "New Ticket" (the task modal shows the ticket form there).
+  const actions: TaskAction[] =
+    newTaskKindInWindow(getProjectStore(projectId)) === 'ticket'
+      ? [
+          {
+            label: 'New Ticket',
+            description: 'Create a ticket and start its PM session',
+            icon: Ticket,
+            disabled: !!createDisabledReason,
+            disabledReason: createDisabledReason,
+            onActivate: () => void openTaskModal({ projectId }),
+          },
+        ]
+      : taskActions;
 
   const { selectedIndex, setSelectedIndex } = useArrowKeyNavigation(actions.length, (index) => {
     const action = actions[index];

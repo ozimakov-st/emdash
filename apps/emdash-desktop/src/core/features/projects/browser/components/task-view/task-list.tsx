@@ -4,7 +4,11 @@ import { Button, ToggleGroup } from '@emdash/ui/react/primitives';
 import { Archive, RotateCcw, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useLayoutEffect, useState } from 'react';
-import { getProjectViewStore } from '@core/features/projects/api/browser/stores/project-selectors';
+import { newTaskKindInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
+import {
+  getProjectStore,
+  getProjectViewStore,
+} from '@core/features/projects/api/browser/stores/project-selectors';
 import type { TaskViewStore } from '@core/features/projects/browser/stores/project-view';
 import { projectAvailabilityUiContribution as projectAvailabilityUi } from '@core/features/projects/contributions/browser/project-availability-ui';
 import { projectViewDef } from '@core/features/projects/contributions/views';
@@ -96,6 +100,10 @@ const TasksToolbar = observer(function TasksToolbar({
         projectAvailabilityUi.defaultLiveActionDisabledReason)
       : undefined;
 
+  // Fork (ozimakov-st): in the PM project the button makes a ticket (see create-task-modal.tsx).
+  const createLabel =
+    newTaskKindInWindow(getProjectStore(projectId)) === 'ticket' ? 'New Ticket' : 'Create Task';
+
   return (
     <CollectionToolbar.Root>
       <TasksTabs view={view} taskView={taskView} taskManager={taskManager} />
@@ -121,10 +129,10 @@ const TasksToolbar = observer(function TasksToolbar({
         variant="primary"
         disabled={!!createDisabledReason}
         title={createDisabledReason}
-        aria-label={createDisabledReason ? `Create Task. ${createDisabledReason}` : 'Create Task'}
+        aria-label={createDisabledReason ? `${createLabel}. ${createDisabledReason}` : createLabel}
         onClick={() => void openCreateTaskModal({ projectId })}
       >
-        Create Task <BoundShortcut command="app.newTask" variant="keycaps" />
+        {createLabel} <BoundShortcut command="app.newTask" variant="keycaps" />
       </Button>
     </CollectionToolbar.Root>
   );

@@ -13,6 +13,7 @@ import { CircleHelp, Hourglass, Plus, RotateCcw } from 'lucide-react';
 import { when } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useState } from 'react';
+import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { newTicketSessionModalProps } from '@core/features/ozdash/api/ticket-issues';
 import {
@@ -28,6 +29,7 @@ import {
 import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { useOpenModal } from '@core/manifests/browser/modal-api';
+import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
 
@@ -38,6 +40,8 @@ const NEW_TASK_TIMEOUT_MS = 20_000;
 
 export const TicketsBoard = observer(function TicketsBoard({ projectId }: { projectId: string }) {
   const { navigate } = useNavigate();
+  // In the PM project the task modal shows the "New ticket" form (create-task-modal.tsx).
+  const openNewTicket = useOpenModal('taskModal');
   const [query, setQuery] = useState('');
   const [showArchive, setShowArchive] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -110,6 +114,16 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
         <span className="ml-auto truncate text-xs text-foreground-passive" title={list?.vaultPath}>
           {list ? `${list.tickets.length} tickets` : ''}
         </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          onClick={() => void openNewTicket({ projectId })}
+        >
+          <Plus className="size-3.5" />
+          New Ticket
+          <BoundShortcut command="app.newTask" variant="keycaps" />
+        </Button>
       </div>
 
       {notice && (
@@ -325,6 +339,7 @@ function TicketCard({
 /**
  * "New task…": pick a project, then the New Task dialog opens with this ticket as
  * its OZ Tickets issue. Creating the task records it in the ticket (see ticket-issues.ts).
+ * The PM project is not offered: its only task for a ticket is the PM session (card click).
  */
 const NewTaskMenu = observer(function NewTaskMenu({
   ticket,
@@ -335,7 +350,7 @@ const NewTaskMenu = observer(function NewTaskMenu({
 }) {
   const openCreateTaskModal = useOpenModal('taskModal');
   const projects = [...getProjectManagerStore().projects.entries()]
-    .filter(([, store]) => asAvailableProject(store) && store.data)
+    .filter(([, store]) => asAvailableProject(store) && store.data && !isPmProjectInWindow(store))
     .map(([id, store]) => ({ id, name: store.data!.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   // The menu is a portal; React still bubbles its events to the card. Stop them here.

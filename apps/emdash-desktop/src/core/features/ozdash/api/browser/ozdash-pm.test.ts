@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPmProject,
+  newTaskKind,
   normalizeAbsolutePath,
   resolvePmProjectPath,
   withPmProjectFirst,
@@ -83,5 +84,17 @@ describe('withPmProjectFirst', () => {
 describe('normalizeAbsolutePath', () => {
   it('handles the root', () => {
     expect(normalizeAbsolutePath('/')).toBe('/');
+  });
+});
+
+describe('newTaskKind', () => {
+  it('makes a ticket in the PM project and a task everywhere else', () => {
+    expect(newTaskKind(local('/Users/oz/Projects/work/'), '/Users/oz/Projects/work')).toBe(
+      'ticket'
+    );
+    expect(newTaskKind(local('/Users/oz/Projects/app'), '/Users/oz/Projects/work')).toBe('task');
+    expect(newTaskKind(ssh('/Users/oz/Projects/work'), '/Users/oz/Projects/work')).toBe('task');
+    expect(newTaskKind(local('/Users/oz/Projects/work'), null)).toBe('task');
+    expect(newTaskKind(null, '/Users/oz/Projects/work')).toBe('task');
   });
 });
