@@ -32,8 +32,8 @@ export function SkillsInfoBox() {
         >
           Agent Skills
         </a>{' '}
-        standard. If you want to use skills from another library, feel free to let us know through
-        the feedback modal.
+        standard.
+        {/* OZdash: dropped the "let us know through the feedback modal" line. */}
       </Alert.Description>
     </Alert.Root>
   );

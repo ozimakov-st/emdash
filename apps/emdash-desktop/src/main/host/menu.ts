@@ -209,10 +209,7 @@ export function setupApplicationMenu(
             },
           ],
         },
-        {
-          label: 'Give Feedback',
-          click: () => emitCommand('app.giveFeedback'),
-        },
+        // OZdash: no "Give Feedback" menu item.
       ],
     },
   ];
