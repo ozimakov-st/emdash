@@ -22,6 +22,8 @@ export type EmdashMcpServerHandle = Readonly<{
   resolveSelfServer(providers: string[]): Result<McpServer, string>;
   /** Rewrites an existing self-registration with the current URL and token. */
   refreshRegistration(): Promise<void>;
+  /** Fork (ozimakov-st): the tools' dependencies, so the Tickets board can create tasks. */
+  readonly dependencies: McpToolDependencies;
 }>;
 
 /**
@@ -46,5 +48,6 @@ export function createEmdashMcpServer(options: EmdashMcpServerOptions): EmdashMc
     stop: () => http.stop(),
     resolveSelfServer: (providers) => resolveSelfServer(registration, providers),
     refreshRegistration: () => refreshSelfServerRegistration(registration),
+    dependencies,
   };
 }

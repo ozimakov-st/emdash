@@ -14,6 +14,7 @@ import {
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useEffect } from 'react';
 import { ConnectionStatusDot } from '@core/features/machines/contributions/browser/connection-status-dot';
+import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import {
   isUnregisteredProject,
   type ProjectCreationStage,
@@ -38,7 +39,7 @@ import {
   useWorkspaceSlots,
 } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
-import { isPmProjectInWindow } from './ozdash-pm';
+import { OzdashTicketsButton } from './ozdash-tickets-button';
 import {
   SidebarItemMiniButton,
   SidebarMenuAction,
@@ -211,6 +212,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
               )}
             </SidebarMenuAction>
           </div>
+          {isPm && <OzdashTicketsButton projectId={projectId} />}
           <Tooltip.Root>
             <Tooltip.Trigger
               className="h-6"

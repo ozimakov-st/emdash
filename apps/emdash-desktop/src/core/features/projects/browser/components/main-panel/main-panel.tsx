@@ -2,6 +2,7 @@ import { Button } from '@emdash/ui/react/primitives';
 import { Loader2, TriangleAlert } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import type { ReactNode } from 'react';
+import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { isUnregisteredProject } from '@core/features/projects/api/browser/stores/project';
 import type { ProjectContextError } from '@core/features/projects/api/browser/stores/project-context';
 import {
@@ -15,6 +16,7 @@ import { useConfirmDeleteProject } from '@core/features/projects/contributions/b
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { BorderlessTitlebar } from '@core/features/workbench/contributions/browser/BorderlessTitlebar';
 import { useCurrentViewParams } from '@core/primitives/navigation/browser/navigation-hooks';
+import { cn } from '@core/primitives/styling/browser/cn';
 import { ProjectErrorDetails } from '../project-error-details';
 import { ActiveProject } from './active-project';
 import { PendingProjectStatus } from './pending-project';
@@ -94,7 +96,11 @@ export function ProjectPageShell({
       <div className="flex min-h-full w-full px-8 py-10">
         <div
           data-project-page-content
-          className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-6"
+          className={cn(
+            'mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-6',
+            // Fork (ozimakov-st): room for the Tickets board columns.
+            isPmProjectInWindow(getProjectStore(projectId)) && 'max-w-6xl'
+          )}
         >
           <ProjectHeader projectId={projectId} />
           {children}

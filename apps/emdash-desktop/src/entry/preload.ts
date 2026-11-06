@@ -41,4 +41,16 @@ contextBridge.exposeInMainWorld('ozdash', {
   pmProjectPathOverride: process.env.OZDASH_PM_PROJECT_PATH ?? null,
   // Task ticket markers (OZDASH_TASK_TICKETS_CHANNEL in mcp/api/ozdash-task-ticket.ts).
   listTaskTickets: () => ipcRenderer.invoke('ozdash:list-task-tickets'),
+  // Tickets board (OZDASH_TICKETS_CHANNELS in ozdash/api/tickets.ts).
+  listTickets: () => ipcRenderer.invoke('ozdash:list-tickets'),
+  onTicketsChanged: (callback: (list: unknown) => void) => {
+    const listener = (_event: unknown, list: unknown) => callback(list);
+    ipcRenderer.on('ozdash:tickets-changed', listener);
+    return () => {
+      ipcRenderer.removeListener('ozdash:tickets-changed', listener);
+    };
+  },
+  restoreTicket: (folder: string) => ipcRenderer.invoke('ozdash:restore-ticket', folder),
+  openTicketSession: (folder: string, projectId: string) =>
+    ipcRenderer.invoke('ozdash:open-ticket-session', folder, projectId),
 });

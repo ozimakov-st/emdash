@@ -1,4 +1,5 @@
 import { computed, makeAutoObservable, observable } from 'mobx';
+import { getPmProjectPath, withPmProjectFirst } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { type ProjectStore } from '@core/features/projects/api/browser/stores/project';
 import type { ProjectManagerStore } from '@core/features/projects/api/browser/stores/project-manager';
 import { asAvailableProject } from '@core/features/projects/api/browser/stores/project-selectors';
@@ -13,7 +14,6 @@ import {
   registeredTaskData,
   unregisteredTaskData,
 } from '@core/primitives/task-state/browser/task-state';
-import { getPmProjectPath, withPmProjectFirst } from './ozdash-pm';
 export type SidebarTaskSortBy = WorkbenchSidebarState['taskSortBy'];
 
 export type TaskSortKind = 'created' | 'updated';

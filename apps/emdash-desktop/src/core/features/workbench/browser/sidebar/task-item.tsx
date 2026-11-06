@@ -1,5 +1,6 @@
 import { Briefcase } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { getProjectStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { useAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
@@ -26,7 +27,6 @@ import {
 import { cn } from '@core/primitives/styling/browser/cn';
 import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
-import { isPmProjectInWindow } from './ozdash-pm';
 import { OzdashTicketMarker } from './ozdash-ticket-marker';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
 

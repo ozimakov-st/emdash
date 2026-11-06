@@ -1,6 +1,15 @@
 import { getPillTabId, PillTabs, type PillTab } from '@emdash/ui/react/patterns';
-import { GitPullRequest, ListTodo, PanelsTopLeft, Settings as SettingsIcon } from 'lucide-react';
+import {
+  GitPullRequest,
+  KanbanSquare,
+  ListTodo,
+  PanelsTopLeft,
+  Settings as SettingsIcon,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
+import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
+import { TicketsBoard } from '@core/features/ozdash/contributions/browser';
 import {
   asAvailableProject,
   getProjectStore,
@@ -42,20 +51,32 @@ export const ActiveProject = observer(function ActiveProject() {
 
   if (!context || !view) return null;
 
-  const activeView = view.activeView;
   const provider = getGitRepositoryStore(projectId)?.providerRepository?.provider;
-  const items =
+  const baseItems =
     provider === 'gitlab'
       ? projectViewItems.map((item) =>
           item.value === 'pull-request' ? { ...item, label: 'Merge Requests' } : item
         )
       : projectViewItems;
+  // Fork (ozimakov-st): the PM project gets a Tickets tab first, selected by default.
+  const isPm = isPmProjectInWindow(getProjectStore(projectId));
+  const activeView: ProjectView | 'tickets' =
+    isPm && ticketsStore.boardSelected ? 'tickets' : view.activeView;
+  const items: readonly PillTab<ProjectView | 'tickets'>[] = isPm
+    ? [
+        { value: 'tickets', label: 'Tickets', icon: <KanbanSquare className="size-3.5" /> },
+        ...baseItems,
+      ]
+    : baseItems;
   return (
     <div className="flex min-h-0 w-full flex-col gap-6">
       <PillTabs
         items={items}
         value={activeView}
-        onValueChange={(nextView) => view.setProjectView(nextView)}
+        onValueChange={(nextView) => {
+          ticketsStore.setBoardSelected(nextView === 'tickets');
+          if (nextView !== 'tickets') view.setProjectView(nextView);
+        }}
         ariaLabel="Project sections"
         panelId={PROJECT_SECTION_PANEL_ID}
       />
@@ -66,7 +87,7 @@ export const ActiveProject = observer(function ActiveProject() {
         className={cn(
           'flex w-full flex-col px-1',
           activeView === 'workspaces' && 'min-h-[calc(100vh-16rem)]',
-          (activeView === 'tasks' || activeView === 'pull-request') &&
+          (activeView === 'tasks' || activeView === 'pull-request' || activeView === 'tickets') &&
             'h-[calc(100vh-16rem)] min-h-96',
           // Settings scrolls internally with a pinned footer, so its floor must
           // fit the smallest supported window (500px − 16rem chrome = 244px);
@@ -75,6 +96,7 @@ export const ActiveProject = observer(function ActiveProject() {
           activeView === 'settings' && 'h-[calc(100vh-16rem)] min-h-60'
         )}
       >
+        {activeView === 'tickets' && <TicketsBoard projectId={projectId} />}
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'pull-request' && <PullRequestView />}
         {activeView === 'workspaces' && <ProjectWorkspacesView projectId={projectId} />}

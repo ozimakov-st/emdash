@@ -169,6 +169,7 @@ import { setBrowserCorsRelaxationSettings } from '@main/host/browser/browser-pro
 import { browserWebContentsRegistry } from '@main/host/browser/browser-webcontents-registry';
 import { HostAttachmentRegistry } from '@main/host/host-attachment-registry';
 import { createSystemNotificationSink } from '@main/host/notifications/system-notification-sink';
+import { registerOzdashTickets } from '@main/host/ozdash-tickets';
 import { encryptedAppSecretsStore } from '@main/host/secrets/encrypted-app-secrets-store';
 import { toPlaintextSecretStore } from '@main/host/secrets/plaintext-secret-store';
 import { setTrayVisible } from '@main/host/tray';
@@ -909,6 +910,8 @@ export async function bootServices(
     return taskTicketStore.listInfos();
   });
   appScope.add(() => ipcMain.removeHandler(OZDASH_TASK_TICKETS_CHANNEL));
+  // Fork (ozimakov-st): the Tickets board (see main/host/ozdash-tickets.ts).
+  appScope.add(registerOzdashTickets(mcpServer.dependencies, log));
   return {
     account: accountService,
     automations: automationsService,
