@@ -39,6 +39,7 @@ import {
   useWorkspaceSlots,
 } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
+import { OzdashProjectAttentionCount } from './ozdash-attention';
 import { OzdashTicketsButton } from './ozdash-tickets-button';
 import {
   SidebarItemMiniButton,
@@ -214,6 +215,8 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
               )}
             </SidebarMenuAction>
           </div>
+          {/* OZdash: count of tasks that need attention while the project is collapsed. */}
+          <OzdashProjectAttentionCount projectId={projectId} />
           {isPm && <OzdashTicketsButton projectId={projectId} />}
           <Tooltip.Root>
             <Tooltip.Trigger

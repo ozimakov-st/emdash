@@ -1,5 +1,6 @@
 import { Briefcase } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { taskAttentionLevel } from '@core/features/ozdash/api/browser/attention';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { getProjectStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
@@ -27,6 +28,7 @@ import {
 import { cn } from '@core/primitives/styling/browser/cn';
 import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
+import { OzdashAttentionIcon, ozdashAttentionRowClass } from './ozdash-attention';
 import { OzdashPmSessionBadge } from './ozdash-pm-session-badge';
 import { OzdashTicketMarker } from './ozdash-ticket-marker';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
@@ -58,6 +60,8 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 
   const taskName = task.data.name;
   const isPm = isPmProjectInWindow(getProjectStore(projectId));
+  // OZdash: highlight tasks that need Oleg (see ozdash-attention.tsx).
+  const attention = taskAttentionLevel(task);
 
   const openTask = () => {
     navigate(taskViewDef({ projectId, taskId }));
@@ -116,7 +120,8 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
       <SidebarMenuRow
         className={cn(
           'group/row flex items-center justify-between px-1 py-1.5 h-8 gap-1',
-          rowVariant === 'pinned' ? 'pl-2' : 'pl-8'
+          rowVariant === 'pinned' ? 'pl-2' : 'pl-8',
+          !isActive && ozdashAttentionRowClass(attention)
         )}
         isActive={isActive}
         onMouseDown={(e) => e.preventDefault()}
@@ -126,6 +131,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           aria-label={`Open task ${taskName || 'task'}`}
           className="gap-1 overflow-hidden"
         >
+          <OzdashAttentionIcon level={attention} />
           {isPm && <Briefcase className="h-3.5 w-3.5 shrink-0 text-foreground-info" />}
           {isPm && <OzdashPmSessionBadge taskId={taskId} />}
           <OzdashTicketMarker taskId={taskId} />

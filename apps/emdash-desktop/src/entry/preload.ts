@@ -56,4 +56,6 @@ contextBridge.exposeInMainWorld('ozdash', {
   linkTicketTask: (input: unknown) => ipcRenderer.invoke('ozdash:link-ticket-task', input),
   createTicket: (input: unknown) => ipcRenderer.invoke('ozdash:create-ticket', input),
   linkPmSession: (input: unknown) => ipcRenderer.invoke('ozdash:link-pm-session', input),
+  // OZdash: Dock badge count (OZDASH_ATTENTION_COUNT_CHANNEL in ozdash/api/attention.ts).
+  setAttentionCount: (count: number) => ipcRenderer.send('ozdash:attention-count', count),
 });

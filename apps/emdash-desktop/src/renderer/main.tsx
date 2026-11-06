@@ -10,6 +10,7 @@ import { installChatUiRuntime } from '@core/features/conversations/api/browser/c
 import { configureDevPerfClient } from '@core/features/dev-perf/api/browser/client';
 import { installMonacoFacetBinder } from '@core/features/editor/browser/monaco/install-monaco-facet-binder';
 import { monacoBootstrap } from '@core/features/editor/browser/monaco/monaco-bootstrap';
+import { startAttentionBadge } from '@core/features/ozdash/api/browser/attention';
 import { getProjectManagerStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { prefetchAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import { initSoundPlayer, soundPlayer } from '@core/features/settings/browser/sound-player';
@@ -149,6 +150,8 @@ async function bootstrap() {
   const sidebarInitialized = Promise.all([navigationRestored, projectsLoaded]).then(() => {
     if (!sidebarHandle.hasStoredValue) getSidebarStore().expandAllProjects();
   });
+  // OZdash: keep the Dock badge in sync with the tasks that need attention.
+  void sidebarInitialized.then(() => startAttentionBadge());
 
   // The gate below awaits only desktop context for the Project required by the restored view.
   const activeProjectReady = waitForActiveProjectContext({
