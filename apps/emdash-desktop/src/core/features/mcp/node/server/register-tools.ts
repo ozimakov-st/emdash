@@ -7,6 +7,7 @@ import {
 } from '@core/features/workspaces/api/node/registry';
 import { getProvisionedWorkspaceBranch } from '@core/features/workspaces/api/node/workspace-branch';
 import { projects, tasks } from '@core/services/app-db/node/schema';
+import { addLocalProject } from './add-project';
 import { attachProject } from './attach-project';
 import { createTaskFromPrompt, validProviderIds } from './create-task-from-prompt';
 import type { McpToolDependencies } from './dependencies';
@@ -286,6 +287,29 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
         .from(projects)
         .where(isNull(projects.deletedAt));
       return textResult(rows);
+    })
+  );
+
+  server.registerTool(
+    'add_project',
+    {
+      title: 'Add project',
+      description:
+        'Adds a local git repository to Emdash as a project, like opening a folder in the ' +
+        'Add Project dialog. If a project already exists at that path, returns it with ' +
+        'created: false instead of adding a duplicate. Fails for a missing path, a file, or a ' +
+        'folder that is not a git repository; it never initializes a repository.',
+      inputSchema: {
+        path: z
+          .string()
+          .describe('Absolute path of the repository on this computer; may start with ~/'),
+        name: z.string().optional().describe('Project name; defaults to the folder name'),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    guarded(dependencies, 'add_project', async (input) => {
+      const result = await addLocalProject(dependencies, input);
+      return result.success ? textResult(result.data) : errorResult(result.error);
     })
   );
 

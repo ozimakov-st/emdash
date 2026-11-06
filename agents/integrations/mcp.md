@@ -45,7 +45,8 @@ Main files:
 - `.../server/mcp-http-server.ts` — the HTTP listener, token file, and origin checks
 - `.../server/register-tools.ts` — tool definitions
 - `.../server/create-task-from-prompt.ts`, `resolve-from-branch.ts`, `run-task-script.ts`,
-  `task-conversation.ts`, `attach-project.ts` — tool implementations and their helpers
+  `task-conversation.ts`, `attach-project.ts`, `add-project.ts` — tool implementations and
+  their helpers
 - `.../server/self-registration.ts` — builds and heals the `emdash` entry in agent configs
 - `apps/emdash-desktop/src/core/primitives/mcp/api/managed.ts` — the shape rules that
   identify the managed entry
@@ -66,9 +67,16 @@ Behavior:
   unrelated squatter); an explicit `EMDASH_MCP_PORT` is taken literally instead
 - the transport runs stateless (`sessionIdGenerator: undefined`, JSON responses), so a
   fresh `McpServer` is built per request
-- tools: `list_projects`, `list_tasks`, `create_task`, `rename_task`, `archive_task`,
-  `delete_task`, `run_task_script`, `stop_task_script`, `send_task_message`,
+- tools: `list_projects`, `add_project`, `list_tasks`, `create_task`, `rename_task`,
+  `archive_task`, `delete_task`, `run_task_script`, `stop_task_script`, `send_task_message`,
   `get_task_status`
+- `add_project` adds a local git repository, like the Add Project dialog's "open a folder"
+  mode: it expands `~`, resolves the real path, calls the projects controller's
+  `inspectProjectPath`, returns an existing project at that path with `created: false`,
+  and otherwise calls `createProject` with the folder name (or `name`). Unlike the dialog
+  it never initializes a repository or trusts one Git refuses for its ownership; a missing
+  path, a file, a non-git folder, or an untrusted repository is a tool error. Local host
+  only. The operations are injected as `projectCreation` from `services.ts`.
 - `send_task_message` sends text to a task's agent. It picks the task's most recently
   active conversation (`lastSessionActivityAt`, else `updatedAt`) unless `conversationId`
   is given. A PTY agent gets the text as a bracketed paste, then a separate `\r` about

@@ -76,6 +76,10 @@ import {
   loadStoredIntegrationAccounts,
 } from '@core/features/projects/api/node/settings/effective-settings';
 import { ProjectSettingsService } from '@core/features/projects/api/node/settings/project-settings-service';
+import {
+  createProject,
+  inspectProjectPath,
+} from '@core/features/projects/node/operations/create-project';
 import type { ProjectDeletionDependencies } from '@core/features/projects/node/operations/deleteProject';
 import {
   getProjectById,
@@ -870,6 +874,10 @@ export async function bootServices(
     db,
     logger: log,
     projects: projectManager,
+    projectCreation: {
+      inspectProjectPath: (params) => inspectProjectPath({ db, runtimes }, params),
+      createProject: (params) => createProject({ db, runtimes }, params),
+    },
     runtimes,
     readProviderSettings: (key) => conversationPreferences.read(key),
     startInitialConversation: createStartInitialConversation({

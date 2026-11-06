@@ -207,6 +207,7 @@ describe('buildEmdashMcpServer', () => {
 
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'add_project',
       'archive_task',
       'create_task',
       'delete_task',
