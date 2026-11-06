@@ -27,6 +27,7 @@ import {
 import { cn } from '@core/primitives/styling/browser/cn';
 import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
+import { OzdashPmSessionBadge } from './ozdash-pm-session-badge';
 import { OzdashTicketMarker } from './ozdash-ticket-marker';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
 
@@ -126,6 +127,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           className="gap-1 overflow-hidden"
         >
           {isPm && <Briefcase className="h-3.5 w-3.5 shrink-0 text-foreground-info" />}
+          {isPm && <OzdashPmSessionBadge taskId={taskId} />}
           <OzdashTicketMarker taskId={taskId} />
           <span
             className={cn(
