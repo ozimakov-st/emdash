@@ -194,4 +194,193 @@ describe('tickets service', () => {
     expect(await service.openSession('9-z', 'pm')).toEqual({ success: false, error: 'no claude' });
     expect(read('9-z')).toBe(ticketText('9', 'draft'));
   });
+
+  describe('createTicket', () => {
+    const template =
+      '---\nid:\ntitle:\nstatus: draft\npm_session:\ncreated:\nupdated:\n---\n\n## Goal\n\n## Log\n';
+    const writeTemplate = () => {
+      mkdirSync(join(vault, 'templates'), { recursive: true });
+      writeFileSync(join(vault, 'templates', 'ticket.md'), template);
+    };
+    const syncCalls = [
+      'add -- vault',
+      'diff --cached --quiet -- vault',
+      'pull --rebase --autostash',
+      'push',
+    ];
+
+    it('writes the next ticket from the template, starts its PM session, and syncs once', async () => {
+      writeTemplate();
+      write('3-old', ticketText('3', 'active'));
+      // The highest id is in the frontmatter, not the folder name.
+      write('4-renamed', ticketText('9', 'active'));
+      mkdirSync(join(vault, 'tickets', '7-folder-only'));
+      const createPmSession = vi.fn(async () => ({ success: true as const, taskId: 'pm-10' }));
+      const service = createTicketsService({
+        vaultPath: vault,
+        logger,
+        run,
+        now: () => NOW,
+        createPmSession,
+        pmSessionExists: vi.fn(),
+      });
+
+      const result = await service.createTicket({
+        title: 'Add SCIM sync',
+        description: 'Sync groups.',
+        projectId: 'pm',
+      });
+
+      expect(result).toEqual({
+        success: true,
+        ticketId: '10',
+        folder: '10-add-scim-sync',
+        projectId: 'pm',
+        taskId: 'pm-10',
+      });
+      expect(createPmSession).toHaveBeenCalledWith({
+        projectId: 'pm',
+        name: 'ticket-10-add-scim-sync',
+        prompt: '/oz-pm 10',
+      });
+      expect(read('10-add-scim-sync')).toBe(
+        '---\nid: 10\ntitle: "Add SCIM sync"\nstatus: draft\npriority: 3\nneeds_oleg: no\n' +
+          'next_check:\npm_session: pm-10\ncreated: 2026-11-06\nupdated: 2026-11-06\n---\n\n' +
+          '## Goal\nSync groups.\n\n## Log\n- 2026-11-06 09:05: Created in OZdash\n'
+      );
+      expect(gitCalls).toEqual([
+        'rev-parse --show-toplevel',
+        'pull --rebase --autostash',
+        'rev-parse --show-toplevel',
+        ...syncCalls,
+      ]);
+    });
+
+    it('keeps the draft without pm_session when the task cannot be created', async () => {
+      const service = createTicketsService({
+        vaultPath: vault,
+        logger,
+        run,
+        now: () => NOW,
+        createPmSession: async () => ({ success: false, error: 'no claude' }),
+        pmSessionExists: vi.fn(),
+      });
+
+      const result = await service.createTicket({
+        title: 'First',
+        description: '',
+        projectId: 'pm',
+      });
+
+      expect(result).toMatchObject({
+        success: true,
+        ticketId: '1',
+        folder: '1-first',
+        taskId: null,
+      });
+      expect(result.success && result.warning).toMatch(
+        /^Ticket #1 was saved as a draft with no PM session.*no claude$/
+      );
+      const content = read('1-first');
+      expect(content).toContain('status: draft\n');
+      expect(content).toContain('pm_session:\n');
+      expect(content).toContain('## Log\n- 2026-11-06 09:05: Created in OZdash\n');
+      expect(gitCalls.filter((call) => call === 'push')).toHaveLength(1);
+    });
+
+    it('uses an existing task as the PM session and creates no task', async () => {
+      const createPmSession = vi.fn();
+      const service = createTicketsService({
+        vaultPath: vault,
+        logger,
+        run,
+        now: () => NOW,
+        createPmSession,
+        pmSessionExists: async (taskId, projectId) => taskId === 'task-x' && projectId === 'pm',
+      });
+      expect(
+        await service.createTicket({
+          title: 'Elsewhere',
+          description: '',
+          projectId: 'other',
+          existingTask: { id: 'task-x', name: 'old-pm' },
+        })
+      ).toEqual({ success: false, error: 'The task is not in the PM project' });
+
+      const result = await service.createTicket({
+        title: 'From task',
+        description: '',
+        projectId: 'pm',
+        existingTask: { id: 'task-x', name: 'old-pm' },
+      });
+
+      expect(result).toMatchObject({ success: true, ticketId: '1', taskId: 'task-x' });
+      expect(createPmSession).not.toHaveBeenCalled();
+      expect(read('1-from-task')).toContain('pm_session: task-x\n');
+    });
+
+    it('gives two quick creates different ids, and refuses an empty title', async () => {
+      const service = createTicketsService({
+        vaultPath: vault,
+        logger,
+        run,
+        createPmSession: async () => ({ success: true, taskId: 't' }),
+        pmSessionExists: vi.fn(),
+      });
+      const [a, b] = await Promise.all([
+        service.createTicket({ title: 'Same', description: '', projectId: 'pm' }),
+        service.createTicket({ title: 'Same', description: '', projectId: 'pm' }),
+      ]);
+      expect(
+        [a, b].map((r) => (r.success ? r.folder : '')).sort((x, y) => x.localeCompare(y))
+      ).toEqual(['1-same', '2-same']);
+      expect(await service.createTicket({ title: '  ', description: '', projectId: 'pm' })).toEqual(
+        { success: false, error: 'The title is empty' }
+      );
+    });
+  });
+
+  describe('linkPmSession', () => {
+    const input = { folder: '4-x', projectId: 'pm', taskId: 'task-new', taskName: 'pm-new' };
+
+    it('links a ticket with a stale pm_session, in place, then syncs', async () => {
+      write('4-x', ticketText('4', 'active', 'gone'));
+      const service = createTicketsService({
+        vaultPath: vault,
+        logger,
+        run,
+        now: () => NOW,
+        createPmSession: vi.fn(),
+        pmSessionExists: async (taskId) => taskId === 'task-new',
+      });
+      expect(await service.linkPmSession(input)).toEqual({ success: true });
+      expect(read('4-x')).toBe(
+        ticketText('4', 'active', 'task-new')
+          .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+          .concat('- 2026-11-06 09:05: PM session pm-new linked in OZdash\n')
+      );
+      expect(gitCalls).toContain('push');
+    });
+
+    it('refuses a ticket whose PM session is live, and a task outside the PM project', async () => {
+      write('4-x', ticketText('4', 'active', 'live'));
+      const service = createTicketsService({
+        vaultPath: vault,
+        logger,
+        run,
+        createPmSession: vi.fn(),
+        pmSessionExists: async (taskId) => taskId === 'live' || taskId === 'task-new',
+      });
+      expect(await service.linkPmSession(input)).toEqual({
+        success: false,
+        error: 'Ticket #4 already has a PM session (live)',
+      });
+      expect(await service.linkPmSession({ ...input, taskId: 'other' })).toEqual({
+        success: false,
+        error: 'The task is not in the PM project',
+      });
+      expect(read('4-x')).toBe(ticketText('4', 'active', 'live'));
+      expect(gitCalls).toEqual([]);
+    });
+  });
 });

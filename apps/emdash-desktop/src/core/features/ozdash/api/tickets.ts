@@ -54,12 +54,45 @@ export type OpenTicketSessionResult =
   | { success: true; projectId: string; taskId: string; created: boolean; warning?: string }
   | { success: false; error: string };
 
+/** "New ticket" (PM project) and "Create ticket from this task". */
+export type CreateTicketInput = {
+  title: string;
+  /** Goes under `## Goal`; may be empty. */
+  description: string;
+  /** The PM project. */
+  projectId: string;
+  /** Set to use this existing PM project task as the PM session (no new task). */
+  existingTask?: { id: string; name: string };
+};
+
+export type CreateTicketResult =
+  | {
+      success: true;
+      ticketId: string;
+      folder: string;
+      projectId: string;
+      /** The PM session task, or null when it could not be created. */
+      taskId: string | null;
+      warning?: string;
+    }
+  | { success: false; error: string };
+
+/** "Link to ticket…": make this PM project task the ticket's PM session. */
+export type LinkPmSessionInput = {
+  folder: string;
+  projectId: string;
+  taskId: string;
+  taskName: string;
+};
+
 /** Main-process invoke channels and the push event (see main/host/ozdash-tickets.ts). */
 export const OZDASH_TICKETS_CHANNELS = {
   list: 'ozdash:list-tickets',
   restore: 'ozdash:restore-ticket',
   openSession: 'ozdash:open-ticket-session',
   linkTask: 'ozdash:link-ticket-task',
+  createTicket: 'ozdash:create-ticket',
+  linkPmSession: 'ozdash:link-pm-session',
   changed: 'ozdash:tickets-changed',
 } as const;
 
@@ -71,6 +104,8 @@ export type OzdashTicketsBridge = {
   openTicketSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
   /** After a task was created from a ticket (see ticket-issues.ts). */
   linkTicketTask(input: LinkTicketTaskInput): Promise<LinkTicketTaskResult>;
+  createTicket(input: CreateTicketInput): Promise<CreateTicketResult>;
+  linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
 };
 
 export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'draft' | 'archive';
@@ -149,4 +184,34 @@ export function ticketSlug(title: string, maxLength = 40): string {
 export function ticketSessionName(ticket: Pick<TicketSummary, 'id' | 'title'>): string {
   const slug = ticketSlug(ticket.title);
   return slug ? `ticket-${ticket.id}-${slug}` : `ticket-${ticket.id}`;
+}
+
+/**
+ * True when a PM project task is no ticket's PM session. False while the list is
+ * not loaded or the vault could not be read (no hint rather than a wrong one).
+ */
+export function pmTaskHasNoTicket(
+  taskId: string,
+  list: Pick<TicketList, 'tickets' | 'error'> | null
+): boolean {
+  if (!list || list.error) return false;
+  return !list.tickets.some((ticket) => ticket.pmSession === taskId);
+}
+
+/**
+ * Tickets a PM project task may become the PM session of: no `pm_session`, or one
+ * that is not a live task any more. Open tickets first, then by id.
+ */
+export function linkableTickets(
+  tickets: readonly TicketSummary[],
+  isLiveTask: (taskId: string) => boolean
+): TicketSummary[] {
+  return tickets
+    .filter((ticket) => !ticket.pmSession || !isLiveTask(ticket.pmSession))
+    .sort(
+      (a, b) =>
+        Number(isArchived(a)) - Number(isArchived(b)) ||
+        Number(a.id) - Number(b.id) ||
+        a.id.localeCompare(b.id)
+    );
 }

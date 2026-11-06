@@ -20,7 +20,9 @@ const CLOSED_DEPENDENCY_STATUSES = new Set([
 function stripQuotes(value: string): string {
   if (value.length >= 2) {
     const first = value[0];
-    if ((first === '"' || first === "'") && value.endsWith(first)) return value.slice(1, -1);
+    // Undo YAML escapes (`\"`, `\\` in double quotes; `''` in single).
+    if (first === '"' && value.endsWith('"')) return value.slice(1, -1).replace(/\\(["\\])/g, '$1');
+    if (first === "'" && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'");
   }
   return value;
 }

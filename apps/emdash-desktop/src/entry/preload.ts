@@ -54,4 +54,6 @@ contextBridge.exposeInMainWorld('ozdash', {
   openTicketSession: (folder: string, projectId: string) =>
     ipcRenderer.invoke('ozdash:open-ticket-session', folder, projectId),
   linkTicketTask: (input: unknown) => ipcRenderer.invoke('ozdash:link-ticket-task', input),
+  createTicket: (input: unknown) => ipcRenderer.invoke('ozdash:create-ticket', input),
+  linkPmSession: (input: unknown) => ipcRenderer.invoke('ozdash:link-pm-session', input),
 });

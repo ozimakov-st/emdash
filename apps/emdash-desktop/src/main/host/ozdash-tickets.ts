@@ -11,7 +11,11 @@ import { taskTicketStoreOf } from '@core/features/mcp/node/server/ozdash-task-ti
 import { sendTaskMessage } from '@core/features/mcp/node/server/task-conversation';
 import { createOzTicketsIssueProvider } from '@core/features/ozdash/api/node/oz-tickets-issue-provider';
 import type { LinkTicketTaskInput } from '@core/features/ozdash/api/ticket-issues';
-import { OZDASH_TICKETS_CHANNELS } from '@core/features/ozdash/api/tickets';
+import {
+  OZDASH_TICKETS_CHANNELS,
+  type CreateTicketInput,
+  type LinkPmSessionInput,
+} from '@core/features/ozdash/api/tickets';
 import { linkTicketTask } from '@core/features/ozdash/node/link-ticket-task';
 import { createTicketsService, resolveVaultPath } from '@core/features/ozdash/node/tickets-service';
 import { projects, tasks } from '@core/services/app-db/node/schema';
@@ -36,6 +40,41 @@ function isLinkInput(value: unknown): value is LinkTicketTaskInput {
     typeof input.taskName === 'string' &&
     typeof input.projectId === 'string' &&
     typeof input.prompt === 'string'
+  );
+}
+
+const MAX_TITLE = 200;
+const MAX_DESCRIPTION = 20_000;
+
+function isShortString(value: unknown, max: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= max;
+}
+
+function isCreateTicketInput(value: unknown): value is CreateTicketInput {
+  if (!value || typeof value !== 'object') return false;
+  const input = value as Record<string, unknown>;
+  const task = input.existingTask as Record<string, unknown> | undefined;
+  return (
+    isShortString(input.title, MAX_TITLE) &&
+    typeof input.description === 'string' &&
+    input.description.length <= MAX_DESCRIPTION &&
+    isShortString(input.projectId, 200) &&
+    (task === undefined ||
+      (!!task &&
+        typeof task === 'object' &&
+        isShortString(task.id, 64) &&
+        typeof task.name === 'string'))
+  );
+}
+
+function isLinkPmSessionInput(value: unknown): value is LinkPmSessionInput {
+  if (!value || typeof value !== 'object') return false;
+  const input = value as Record<string, unknown>;
+  return (
+    isShortString(input.folder, 200) &&
+    isShortString(input.projectId, 200) &&
+    isShortString(input.taskId, 64) &&
+    typeof input.taskName === 'string'
   );
 }
 
@@ -71,7 +110,8 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
   const taskTickets = taskTicketStoreOf(mcp);
   const firstRow = <T>(rows: T[]): T | undefined => rows[0];
 
-  const { list, restore, openSession, linkTask, changed } = OZDASH_TICKETS_CHANNELS;
+  const { list, restore, openSession, linkTask, createTicket, linkPmSession, changed } =
+    OZDASH_TICKETS_CHANNELS;
   ipcMain.handle(list, () => service.list());
   ipcMain.handle(restore, (_event, folder: unknown) =>
     typeof folder === 'string'
@@ -115,6 +155,16 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
         )
       : { success: false, error: 'Invalid ticket link' }
   );
+  ipcMain.handle(createTicket, (_event, input: unknown) =>
+    isCreateTicketInput(input)
+      ? service.createTicket(input)
+      : { success: false, error: 'Invalid new ticket' }
+  );
+  ipcMain.handle(linkPmSession, (_event, input: unknown) =>
+    isLinkPmSessionInput(input)
+      ? service.linkPmSession(input)
+      : { success: false, error: 'Invalid PM session link' }
+  );
   const stopWatching = service.watch((next) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(changed, next);
@@ -128,5 +178,7 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     ipcMain.removeHandler(restore);
     ipcMain.removeHandler(openSession);
     ipcMain.removeHandler(linkTask);
+    ipcMain.removeHandler(createTicket);
+    ipcMain.removeHandler(linkPmSession);
   };
 }

@@ -2,12 +2,16 @@
 // from the main process (`window.ozdash.listTickets`) and is pushed again whenever
 // the vault changes (`onTicketsChanged`).
 import { computed, makeAutoObservable, runInAction } from 'mobx';
-import type {
-  OpenTicketSessionResult,
-  OzdashTicketsBridge,
-  TicketActionResult,
-  TicketList,
-  TicketSummary,
+import {
+  pmTaskHasNoTicket,
+  type CreateTicketInput,
+  type CreateTicketResult,
+  type LinkPmSessionInput,
+  type OpenTicketSessionResult,
+  type OzdashTicketsBridge,
+  type TicketActionResult,
+  type TicketList,
+  type TicketSummary,
 } from '../tickets';
 
 function bridge(): Partial<OzdashTicketsBridge> | undefined {
@@ -82,6 +86,30 @@ class TicketsStore {
     }
   }
 
+  async createTicket(input: CreateTicketInput): Promise<CreateTicketResult> {
+    const api = bridge();
+    if (!api?.createTicket) return { success: false, error: 'Not available outside OZdash' };
+    try {
+      return await api.createTicket(input);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      void this.reload();
+    }
+  }
+
+  async linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult> {
+    const api = bridge();
+    if (!api?.linkPmSession) return { success: false, error: 'Not available outside OZdash' };
+    try {
+      return await api.linkPmSession(input);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      void this.reload();
+    }
+  }
+
   async openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult> {
     const api = bridge();
     if (!api?.openTicketSession) return { success: false, error: 'Not available outside OZdash' };
@@ -94,6 +122,12 @@ class TicketsStore {
 }
 
 export const ticketsStore = new TicketsStore();
+
+/** True when this PM project task is no ticket's PM session. Call from an `observer`. */
+export function pmTaskNeedsTicket(taskId: string): boolean {
+  ticketsStore.ensureStarted();
+  return pmTaskHasNoTicket(taskId, ticketsStore.list);
+}
 
 /** The ticket whose PM session is this task, or null. Call from an `observer` component. */
 export function ticketForPmSession(taskId: string): TicketSummary | null {

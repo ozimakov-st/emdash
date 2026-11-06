@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   groupTickets,
+  linkableTickets,
+  pmTaskHasNoTicket,
   ticketColumn,
   ticketMatchesQuery,
   ticketSessionName,
@@ -88,5 +90,32 @@ describe('ticket session names', () => {
       'ticket-123-fix-login-sso'
     );
     expect(ticketSessionName({ id: '9', title: '!!!' })).toBe('ticket-9');
+  });
+});
+
+describe('pmTaskHasNoTicket', () => {
+  const tickets = [ticket({ id: '1', pmSession: 'task-1' }), ticket({ id: '2' })];
+
+  it('is true only when no ticket points to the task', () => {
+    expect(pmTaskHasNoTicket('task-1', { tickets, error: null })).toBe(false);
+    expect(pmTaskHasNoTicket('task-9', { tickets, error: null })).toBe(true);
+  });
+
+  it('is false while the list is missing or the vault could not be read', () => {
+    expect(pmTaskHasNoTicket('task-9', null)).toBe(false);
+    expect(pmTaskHasNoTicket('task-9', { tickets: [], error: 'No vault' })).toBe(false);
+  });
+});
+
+describe('linkableTickets', () => {
+  it('lists tickets with an empty or stale pm_session, open ones first, then by id', () => {
+    const tickets = [
+      ticket({ id: '10', pmSession: 'gone' }),
+      ticket({ id: '2', status: 'done' }),
+      ticket({ id: '3', pmSession: 'live' }),
+      ticket({ id: '9' }),
+    ];
+    const ids = linkableTickets(tickets, (taskId) => taskId === 'live').map((t) => t.id);
+    expect(ids).toEqual(['9', '10', '2']);
   });
 });

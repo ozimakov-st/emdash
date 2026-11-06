@@ -2,20 +2,31 @@
 // vault, watches it, restores archived tickets, and opens (or starts) a ticket's PM
 // session. Every write is followed by a vault sync (see vault-sync.ts).
 import { watch, type FSWatcher } from 'node:fs';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Logger } from '@emdash/shared/logger';
 import {
   isArchived,
   ticketSessionName,
+  type CreateTicketInput,
+  type CreateTicketResult,
+  type LinkPmSessionInput,
   type OpenTicketSessionResult,
   type TicketActionResult,
   type TicketList,
   type TicketSummary,
 } from '../api/tickets';
 import {
+  cleanTitle,
+  linkPmSessionContent,
+  newTicketContent,
+  nextTicketId,
+  ticketFolderName,
+} from './ticket-creator';
+import {
   addChildTaskContent,
   restoreTicketContent,
+  setFrontmatterValue,
   setPmSessionContent,
   type ChildTaskLink,
   type EditResult,
@@ -94,6 +105,13 @@ export interface TicketsService {
   findTicket(ticketId: string): Promise<TicketSummary | null>;
   /** Adds a `child` Dependencies row and a Log line for a task created from the ticket. */
   linkChildTask(folder: string, link: ChildTaskLink): Promise<TicketActionResult>;
+  /**
+   * Writes a new ticket and starts its PM session (or uses `existingTask`), then
+   * syncs the vault once. The file stays when the task cannot be created.
+   */
+  createTicket(input: CreateTicketInput): Promise<CreateTicketResult>;
+  /** Makes a PM project task the ticket's PM session (`pm_session` + Log line), then syncs. */
+  linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
 }
@@ -171,6 +189,134 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     return { success: true };
   }
 
+  /** Commits and pushes `vault/`. Returns a warning when it could not. */
+  async function syncNow(message: string): Promise<string | undefined> {
+    const repo = await resolveVaultRepo(vaultPath, run);
+    if (!repo.success) return `Saved, but not synced. ${repo.error}`;
+    const synced = await syncVault(repo.repo, message, run);
+    if (synced.success) return undefined;
+    logger.warn('ozdash tickets: vault sync failed', { error: synced.error });
+    return `Saved, but the vault sync failed: ${synced.error}`;
+  }
+
+  /** Pulls, picks the next id, and writes the new ticket file (not synced yet). */
+  async function writeNewTicket(
+    title: string,
+    description: string,
+    pmSession: string
+  ): Promise<{ success: true; id: string; folder: string } | { success: false; error: string }> {
+    const repo = await resolveVaultRepo(vaultPath, run);
+    if (repo.success) {
+      const pulled = await pullVault(repo.repo, run);
+      if (!pulled.success)
+        logger.warn('ozdash tickets: pull before create failed', { error: pulled.error });
+    }
+    const ticketsDir = join(vaultPath, 'tickets');
+    try {
+      await stat(vaultPath);
+      await mkdir(ticketsDir, { recursive: true });
+      const folders = (await readdir(ticketsDir, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+      const ids = (await readTickets(vaultPath)).tickets.map((ticket) => ticket.id);
+      const id = nextTicketId(folders, ids);
+      const folder = ticketFolderName(id, title);
+      const template = await readFile(join(vaultPath, 'templates', 'ticket.md'), 'utf8').catch(
+        () => null
+      );
+      const content = newTicketContent(template, {
+        id,
+        title,
+        description,
+        pmSession,
+        now: now(),
+      });
+      if (!content.success)
+        return { success: false, error: `Bad ticket template: ${content.error}` };
+      await mkdir(join(ticketsDir, folder));
+      await writeFile(ticketFile(folder), content.content, { encoding: 'utf8', flag: 'wx' });
+      return { success: true, id: String(id), folder };
+    } catch (error) {
+      return { success: false, error: `Could not write the ticket: ${String(error)}` };
+    }
+  }
+
+  async function createTicket(input: CreateTicketInput): Promise<CreateTicketResult> {
+    const title = cleanTitle(input.title);
+    if (!title) return { success: false, error: 'The title is empty' };
+    const { projectId, existingTask } = input;
+    if (existingTask && !(await options.pmSessionExists(existingTask.id, projectId)))
+      return { success: false, error: 'The task is not in the PM project' };
+    const written = await serialize(() =>
+      writeNewTicket(title, input.description, existingTask?.id ?? '')
+    );
+    if (!written.success) return written;
+    const { id, folder } = written;
+
+    const warnings: string[] = [];
+    let taskId = existingTask?.id ?? null;
+    if (!existingTask) {
+      const created = await options.createPmSession({
+        projectId,
+        name: ticketSessionName({ id, title }),
+        prompt: `/oz-pm ${id}`,
+      });
+      if (created.success) {
+        taskId = created.taskId;
+        if (created.warning) warnings.push(created.warning);
+      } else {
+        warnings.push(
+          `Ticket #${id} was saved as a draft with no PM session, because the task could not be created: ${created.error}`
+        );
+      }
+    }
+
+    const synced = await serialize(async () => {
+      if (taskId && !existingTask) {
+        try {
+          const content = await readFile(ticketFile(folder), 'utf8');
+          const edited = setFrontmatterValue(content, 'pm_session', taskId);
+          if (!edited.success) throw new Error(edited.error);
+          await writeFile(ticketFile(folder), edited.content, 'utf8');
+        } catch (error) {
+          warnings.push(`The PM session was not saved in the ticket: ${String(error)}`);
+        }
+      }
+      return syncNow(`tickets: new #${id} (OZdash)`);
+    });
+    if (synced) warnings.push(synced);
+    return {
+      success: true,
+      ticketId: id,
+      folder,
+      projectId,
+      taskId,
+      ...(warnings.length > 0 && { warning: warnings.join(' ') }),
+    };
+  }
+
+  async function linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult> {
+    const { folder, projectId, taskId, taskName } = input;
+    if (!(await options.pmSessionExists(taskId, projectId)))
+      return { success: false, error: 'The task is not in the PM project' };
+    const found = await readTicket(folder);
+    if (!found.success) return found;
+    const current = found.ticket.pmSession;
+    if (current === taskId) return { success: true };
+    if (current && (await options.pmSessionExists(current, projectId)))
+      return {
+        success: false,
+        error: `Ticket #${found.ticket.id} already has a PM session (${current})`,
+      };
+    return serialize(() =>
+      editAndSync(
+        folder,
+        (content) => linkPmSessionContent(content, taskId, taskName, now()),
+        (ticket) => `tickets: link PM session ${taskName} to #${ticket.id} (OZdash)`
+      )
+    );
+  }
+
   async function openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult> {
     const found = await readTicket(folder);
     if (!found.success) return found;
@@ -237,6 +383,10 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
         )
       );
     },
+
+    createTicket,
+
+    linkPmSession,
 
     openSession(folder, projectId) {
       // A second click while the first one still creates the session waits for it.

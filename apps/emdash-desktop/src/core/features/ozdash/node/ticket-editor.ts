@@ -132,7 +132,8 @@ export function formatDateTime(now: Date): string {
   return `${formatDate(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
-function chain(content: string, edits: Array<(content: string) => EditResult>): EditResult {
+/** Runs edits one after another; stops at the first failure. */
+export function chain(content: string, edits: Array<(content: string) => EditResult>): EditResult {
   let current = content;
   for (const edit of edits) {
     const result = edit(current);
