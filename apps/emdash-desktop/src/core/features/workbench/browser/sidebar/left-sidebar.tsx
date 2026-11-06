@@ -11,6 +11,7 @@ import {
   useWorkspaceSlots,
 } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
+import { OzdashNavGroup } from './ozdash-nav-group';
 import { SidebarPinnedTaskList } from './pinned-task-list';
 import { ProjectsGroupLabel } from './projects-group-label';
 import {
@@ -67,30 +68,33 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
-            <SidebarSearchTrigger />
-            <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'automations')}
-              onClick={() => navigate(automationsViewDef())}
-              aria-label="Automations"
-              className="w-full justify-between"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <Clock className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
-                <span className="truncate">Automations</span>
-              </span>
-            </SidebarMenuButton>
-            <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'settings')}
-              onClick={() => navigate(settingsViewDef())}
-              aria-label="Settings"
-              className="w-full justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <Settings className="h-5 w-5 sm:h-4 sm:w-4" />
-                Settings
-              </span>
-              <BoundShortcut command="app.settings" variant="keycaps" />
-            </SidebarMenuButton>
+            {/* OZdash: Search / Automations / Settings sit in a collapsible "More" group. */}
+            <OzdashNavGroup>
+              <SidebarSearchTrigger />
+              <SidebarMenuButton
+                isActive={isCurrentView(currentView, 'automations')}
+                onClick={() => navigate(automationsViewDef())}
+                aria-label="Automations"
+                className="w-full justify-between"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Clock className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
+                  <span className="truncate">Automations</span>
+                </span>
+              </SidebarMenuButton>
+              <SidebarMenuButton
+                isActive={isCurrentView(currentView, 'settings')}
+                onClick={() => navigate(settingsViewDef())}
+                aria-label="Settings"
+                className="w-full justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 sm:h-4 sm:w-4" />
+                  Settings
+                </span>
+                <BoundShortcut command="app.settings" variant="keycaps" />
+              </SidebarMenuButton>
+            </OzdashNavGroup>
           </SidebarMenu>
         </SidebarFooter>
         <div

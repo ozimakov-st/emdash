@@ -1,4 +1,5 @@
 import { acpDraftMemento } from '@core/features/conversations/contributions/mementos';
+import { ozdashSidebarMemento } from '@core/features/ozdash/contributions/mementos';
 import {
   projectViewMemento,
   workspaceChromeMemento,
@@ -40,6 +41,7 @@ export const mementoCatalog: readonly MementoCatalogEntry[] = [
   workbenchPanelLayoutsMemento,
   workbenchSidebarMemento,
   workbenchHistoryMemento,
+  ozdashSidebarMemento, // OZdash
 ];
 
 export const mementoSweepPolicies = mementoCatalog.flatMap((definition) =>
