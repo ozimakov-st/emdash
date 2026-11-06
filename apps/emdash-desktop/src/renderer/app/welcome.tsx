@@ -5,6 +5,7 @@ import IconLight from '@/assets/images/emdash/icon-light.png';
 import YTBanner from '@/assets/images/ytbanner.webp';
 import { useAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import { confirmCommand } from '@core/features/workbench/contributions/commands';
+import { PRODUCT_NAME } from '@core/primitives/app-identity/api/app-identity';
 import { detectPlatformContext, resolveEffectiveChord } from '@core/primitives/keybindings/api';
 import { useChordKeydown } from '@core/primitives/keybindings/browser';
 import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
@@ -112,7 +113,7 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
           className="rounded-md border border-border/40 bg-white p-1.5 shadow-lg ring-1 shadow-black/5 ring-black/5"
           variants={itemVariants}
         >
-          <img src={IconLight} alt="Emdash" className="h-12 w-12 rounded-sm" />
+          <img src={IconLight} alt={PRODUCT_NAME} className="h-12 w-12 rounded-sm" />
         </motion.div>
 
         <motion.h1

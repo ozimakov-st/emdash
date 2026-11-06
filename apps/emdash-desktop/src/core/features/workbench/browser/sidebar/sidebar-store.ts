@@ -13,6 +13,7 @@ import {
   registeredTaskData,
   unregisteredTaskData,
 } from '@core/primitives/task-state/browser/task-state';
+import { getPmProjectPath, withPmProjectFirst } from './ozdash-pm';
 export type SidebarTaskSortBy = WorkbenchSidebarState['taskSortBy'];
 
 export type TaskSortKind = 'created' | 'updated';
@@ -93,7 +94,7 @@ export class SidebarStore {
   get orderedProjects(): ProjectStore[] {
     const all = Array.from(this.projectManager.projects.values());
 
-    return [...all].sort((a, b) => {
+    const sorted = [...all].sort((a, b) => {
       const ai = this.projectOrder.indexOf(a.id);
       const bi = this.projectOrder.indexOf(b.id);
       if (ai === -1 && bi === -1) return this.compareSidebarProjects(a, b);
@@ -101,6 +102,8 @@ export class SidebarStore {
       if (bi === -1) return 1;
       return ai - bi;
     });
+    // Fork (ozimakov-st): the PM project always comes first.
+    return withPmProjectFirst(sorted, getPmProjectPath());
   }
 
   get sidebarRows(): SidebarRow[] {

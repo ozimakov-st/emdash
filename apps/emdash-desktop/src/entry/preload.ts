@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { requestWirePort, type WindowLike } from '@emdash/wire/rpc';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
@@ -32,4 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reportBootUsable: () => {
     ipcRenderer.send('emdash:boot-usable-workspace');
   },
+});
+
+// Fork (ozimakov-st): inputs for the sidebar "PM" project (see ozdash-pm.ts).
+contextBridge.exposeInMainWorld('ozdash', {
+  homeDir: homedir(),
+  pmProjectPathOverride: process.env.OZDASH_PM_PROJECT_PATH ?? null,
 });

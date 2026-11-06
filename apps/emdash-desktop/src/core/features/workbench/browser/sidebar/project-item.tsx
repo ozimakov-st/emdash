@@ -1,5 +1,6 @@
 import { ContextMenu, Tooltip } from '@emdash/ui/react/primitives';
 import {
+  Briefcase,
   ChevronRight,
   FolderClosed,
   FolderInput,
@@ -37,6 +38,7 @@ import {
   useWorkspaceSlots,
 } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
+import { isPmProjectInWindow } from './ozdash-pm';
 import {
   SidebarItemMiniButton,
   SidebarMenuAction,
@@ -102,7 +104,14 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
         ? 'connecting'
         : 'disconnected'
       : 'connected';
-  const ProjectIcon = isSshProject ? FolderInput : isExpanded ? FolderOpen : FolderClosed;
+  const isPm = isPmProjectInWindow(project);
+  const ProjectIcon = isPm
+    ? Briefcase
+    : isSshProject
+      ? FolderInput
+      : isExpanded
+        ? FolderOpen
+        : FolderClosed;
   const projectLabel = project.name ?? 'project';
   const createAvailability = taskHostActionAvailability(projectId);
   const createDisabledReason =
@@ -153,7 +162,12 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
                   getSidebarStore().toggleProjectExpanded(projectId);
                 }}
               >
-                <ProjectIcon className="absolute h-4 w-4 opacity-100 transition-opacity duration-150 group-hover/row:opacity-0" />
+                <ProjectIcon
+                  className={cn(
+                    'absolute h-4 w-4 opacity-100 transition-opacity duration-150 group-hover/row:opacity-0',
+                    isPm && 'text-foreground-info'
+                  )}
+                />
                 <ChevronRight
                   className={cn(
                     'absolute h-4 w-4 transition-all duration-150 opacity-0 group-hover/row:opacity-100',
@@ -177,7 +191,14 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
                 </span>
               ) : (
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate">{project.name}</span>
+                  {isPm && (
+                    <span className="shrink-0 rounded-md bg-background-info px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-foreground-info">
+                      PM
+                    </span>
+                  )}
+                  <span className={cn('truncate', isPm && 'text-foreground-muted')}>
+                    {project.name}
+                  </span>
                   {projectViewKind(project) === 'context_error' && (
                     <Tooltip.Root>
                       <Tooltip.Trigger>

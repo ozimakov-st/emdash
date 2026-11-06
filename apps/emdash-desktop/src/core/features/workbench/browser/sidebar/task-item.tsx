@@ -1,4 +1,6 @@
+import { Briefcase } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { getProjectStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { useAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import {
@@ -24,6 +26,7 @@ import {
 import { cn } from '@core/primitives/styling/browser/cn';
 import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
+import { isPmProjectInWindow } from './ozdash-pm';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
 
 interface SidebarTaskItemProps {
@@ -52,6 +55,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const taskManager = getTaskManagerStore(projectId);
 
   const taskName = task.data.name;
+  const isPm = isPmProjectInWindow(getProjectStore(projectId));
 
   const openTask = () => {
     navigate(taskViewDef({ projectId, taskId }));
@@ -120,6 +124,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           aria-label={`Open task ${taskName || 'task'}`}
           className="gap-1 overflow-hidden"
         >
+          {isPm && <Briefcase className="h-3.5 w-3.5 shrink-0 text-foreground-info" />}
           <span
             className={cn(
               'min-w-0 truncate text-left transition-colors',
