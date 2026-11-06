@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { ConnectionStatusDot } from '@core/features/machines/contributions/browser/connection-status-dot';
+import { OzdashNoTicketChip } from '@core/features/ozdash/contributions/browser';
 import {
   asAvailableProject,
   getProjectStore,
@@ -294,6 +295,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
           </Popover.Root>
           {taskPayload.linkedIssue ? <LinkedIssueBadge issue={taskPayload.linkedIssue} /> : null}
           <OzdashTicketChip taskId={taskId} />
+          <OzdashNoTicketChip projectId={projectId} taskId={taskId} />
           {taskPayload.type === 'task' && (
             <button
               className={cn(
