@@ -26,6 +26,7 @@ import { WorkspaceSettingsSection } from '@core/features/tasks/contributions/bro
 import { useModalController } from '@core/manifests/browser/modal-api';
 import { projectAvailabilityUi } from '@core/manifests/browser/project-availability-ui';
 import { ConfirmButton } from '@core/primitives/keybindings/browser/confirm-button';
+import type { LinkedIssue } from '@core/primitives/linked-issues/api';
 import { defineModal } from '@core/primitives/modals/react';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { getNavigation } from '@core/primitives/navigation/browser/navigation-selectors';
@@ -54,11 +55,14 @@ export const CreateTaskModal = observer(function CreateTaskModal({
   strategy: initialStrategy,
   initialPR,
   initialWorkspaceId,
+  initialIssue,
 }: {
   projectId?: string;
   strategy?: CreateTaskStrategy;
   initialPR?: PullRequest;
   initialWorkspaceId?: string;
+  /** Fork (ozimakov-st): an issue to start with (the Tickets board's "New session"). */
+  initialIssue?: LinkedIssue;
 }) {
   const { complete } = useModalController('taskModal');
   const selectedProjectId = useDefaultProjectId(projectId);
@@ -108,7 +112,8 @@ export const CreateTaskModal = observer(function CreateTaskModal({
     repositoryWorkspaceId,
     resolvedInitialPR,
     defaults.linkedType,
-    initialWorkspaceId
+    initialWorkspaceId,
+    initialStrategy === 'from-issue' ? initialIssue : undefined
   );
 
   const { includeIssueContextByDefault } = useTaskSettings();

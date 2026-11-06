@@ -1,19 +1,33 @@
 // Fork (ozimakov-st): the Tickets board. Shown in the PM project's main panel.
 // Columns: Needs Oleg, Active, Waiting, Draft, and (on demand) Archive.
-import { Alert, Badge, Button, SearchInput, Spinner, Switch } from '@emdash/ui/react/primitives';
-import { CircleHelp, Hourglass, RotateCcw } from 'lucide-react';
+import {
+  Alert,
+  Badge,
+  Button,
+  DropdownMenu,
+  SearchInput,
+  Spinner,
+  Switch,
+} from '@emdash/ui/react/primitives';
+import { CircleHelp, Hourglass, Plus, RotateCcw } from 'lucide-react';
 import { when } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useState } from 'react';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
+import { newTicketSessionModalProps } from '@core/features/ozdash/api/ticket-issues';
 import {
   groupTickets,
   TICKET_COLUMNS,
   type TicketColumnId,
   type TicketSummary,
 } from '@core/features/ozdash/api/tickets';
+import {
+  asAvailableProject,
+  getProjectManagerStore,
+} from '@core/features/projects/api/browser/stores/project-selectors';
 import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
+import { useOpenModal } from '@core/manifests/browser/modal-api';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
 
@@ -128,6 +142,7 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
                 id={column.id}
                 label={column.label}
                 tickets={groups[column.id]}
+                vaultPath={list?.vaultPath ?? null}
                 busy={busy}
                 onOpen={openTicket}
               />
@@ -172,12 +187,14 @@ function TicketColumn({
   id,
   label,
   tickets,
+  vaultPath,
   busy,
   onOpen,
 }: {
   id: TicketColumnId;
   label: string;
   tickets: TicketSummary[];
+  vaultPath: string | null;
   busy: string | null;
   onOpen: (ticket: TicketSummary) => void;
 }) {
@@ -197,6 +214,7 @@ function TicketColumn({
           <TicketCard
             key={ticket.folder}
             ticket={ticket}
+            vaultPath={vaultPath}
             busy={busy === ticket.folder}
             onOpen={onOpen}
           />
@@ -208,11 +226,14 @@ function TicketColumn({
 
 function TicketCard({
   ticket,
+  vaultPath,
   busy,
   onOpen,
   onRestore,
 }: {
   ticket: TicketSummary;
+  /** Set on open tickets: shows "New session…". */
+  vaultPath?: string | null;
   busy: boolean;
   onOpen: (ticket: TicketSummary) => void;
   onRestore?: (ticket: TicketSummary) => void;
@@ -279,6 +300,7 @@ function TicketCard({
       )}
       <div className="flex items-center gap-2 text-[11px] text-foreground-passive">
         {ticket.updated && <span>Updated {ticket.updated}</span>}
+        {vaultPath && <NewSessionMenu ticket={ticket} vaultPath={vaultPath} />}
         {onRestore && (
           <Button
             type="button"
@@ -299,3 +321,60 @@ function TicketCard({
     </div>
   );
 }
+
+/**
+ * "New session…": pick a project, then the New Task dialog opens with this ticket as
+ * its OZ Tickets issue. Creating the task records it in the ticket (see ticket-issues.ts).
+ */
+const NewSessionMenu = observer(function NewSessionMenu({
+  ticket,
+  vaultPath,
+}: {
+  ticket: TicketSummary;
+  vaultPath: string;
+}) {
+  const openCreateTaskModal = useOpenModal('taskModal');
+  const projects = [...getProjectManagerStore().projects.entries()]
+    .filter(([, store]) => asAvailableProject(store) && store.data)
+    .map(([id, store]) => ({ id, name: store.data!.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  // The menu is a portal; React still bubbles its events to the card. Stop them here.
+  return (
+    <span
+      className="ml-auto"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          aria-label={`New session for ticket ${ticket.id}`}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-foreground-passive opacity-0 group-hover:opacity-100 hover:bg-background-2 hover:text-foreground focus-visible:opacity-100 data-popup-open:opacity-100"
+        >
+          <Plus className="size-3" />
+          New session…
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end">
+          <DropdownMenu.Group>
+            <DropdownMenu.Label>Start a task in project</DropdownMenu.Label>
+            {projects.length === 0 ? (
+              <DropdownMenu.Item disabled>No projects available</DropdownMenu.Item>
+            ) : (
+              projects.map((project) => (
+                <DropdownMenu.Item
+                  key={project.id}
+                  onClick={() =>
+                    void openCreateTaskModal(
+                      newTicketSessionModalProps(ticket, vaultPath, project.id)
+                    )
+                  }
+                >
+                  {project.name}
+                </DropdownMenu.Item>
+              ))
+            )}
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </span>
+  );
+});
