@@ -27,6 +27,22 @@ afterEach(() => {
 });
 
 describe('EncryptedAppSecretsStore', () => {
+  it('treats a secret it cannot decrypt as missing (OZdash rename or re-sign)', async () => {
+    fixture = await openFixture('empty');
+    const writer = new EncryptedAppSecretsStore(fixture.db, fakeSafeStorage, 'darwin');
+    await writer.setSecret('test-key', secret('hunter2', 'test-key'));
+    const brokenKeychain = {
+      ...fakeSafeStorage,
+      isEncryptionAvailable: () => true,
+      decryptString: () => {
+        throw new Error('Error while decrypting the ciphertext');
+      },
+    } as unknown as Electron.SafeStorage;
+    const reader = new EncryptedAppSecretsStore(fixture.db, brokenKeychain, 'darwin');
+
+    await expect(reader.getSecret('test-key')).resolves.toBeNull();
+  });
+
   it('round-trips a Secret-typed value intact', async () => {
     const store = await makeStore();
     await store.setSecret('test-key', secret('hunter2', 'test-key'));

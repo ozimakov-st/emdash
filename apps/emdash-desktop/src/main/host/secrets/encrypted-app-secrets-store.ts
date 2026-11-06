@@ -29,7 +29,14 @@ export class EncryptedAppSecretsStore {
     }
 
     this.assertSecureStorageAvailable();
-    return secret(this.safeStorageApi.decryptString(Buffer.from(encrypted, 'base64')), key);
+    try {
+      return secret(this.safeStorageApi.decryptString(Buffer.from(encrypted, 'base64')), key);
+    } catch {
+      // Fork (OZdash): the keychain key changes when the app is renamed or
+      // re-signed. A secret we cannot decrypt is treated as missing, so the user
+      // signs in again instead of the app failing to start.
+      return null;
+    }
   }
 
   async setSecret(key: string, value: Secret<string>): Promise<void> {
