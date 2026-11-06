@@ -721,7 +721,7 @@ describe('buildEmdashMcpServer', () => {
         },
       ],
       latestOutput: { conversationId: 'task-1', text: 'STATUS: done\n' },
-      pmTask: null,
+      ticket: null,
     });
   });
 
@@ -735,19 +735,20 @@ describe('buildEmdashMcpServer', () => {
     expect(result.content[0].text).toBe('Task not found in project p: missing');
   });
 
-  describe('pmTask (fork)', () => {
-    const pmTask = { id: '123', title: 'Fix login', managerTaskId: 'task-pm' };
-    function fakePmTasks() {
+  describe('ticket (fork)', () => {
+    const ticket = { id: '123', title: 'Fix login', pmSessionId: 'task-pm' };
+    function fakeTaskTickets() {
       return {
-        get: vi.fn(async (taskId: string) => (taskId === 'task-1' ? pmTask : null)),
-        getMany: vi.fn(async () => new Map([['task-1', pmTask]])),
+        get: vi.fn(async (taskId: string) => (taskId === 'task-1' ? ticket : null)),
+        getMany: vi.fn(async () => new Map([['task-1', ticket]])),
         set: vi.fn(async () => {}),
         delete: vi.fn(async () => {}),
         listInfos: vi.fn(async () => ({})),
+        migrateLegacyEntries: vi.fn(async () => 0),
       };
     }
 
-    it('lists pmTask on each task, or null', async () => {
+    it('lists ticket on each task, or null', async () => {
       const row = (id: string) => ({
         id,
         name: id,
@@ -756,56 +757,59 @@ describe('buildEmdashMcpServer', () => {
         archivedAt: null,
         workspaceId: null,
       });
-      const pmTasks = fakePmTasks();
-      const deps = dependencies({ db: fakeDb([row('task-1'), row('task-2')]) as never, pmTasks });
+      const taskTickets = fakeTaskTickets();
+      const deps = dependencies({
+        db: fakeDb([row('task-1'), row('task-2')]) as never,
+        taskTickets,
+      });
 
       const listed = parse(await callTool(deps, 'list_tasks', { projectId: 'p' })) as {
-        tasks: Array<{ id: string; pmTask: unknown }>;
+        tasks: Array<{ id: string; ticket: unknown }>;
       };
 
-      expect(listed.tasks.map((task) => [task.id, task.pmTask])).toEqual([
-        ['task-1', pmTask],
+      expect(listed.tasks.map((task) => [task.id, task.ticket])).toEqual([
+        ['task-1', ticket],
         ['task-2', null],
       ]);
-      expect(pmTasks.getMany).toHaveBeenCalledWith(['task-1', 'task-2']);
+      expect(taskTickets.getMany).toHaveBeenCalledWith(['task-1', 'task-2']);
     });
 
-    it('returns pmTask from get_task_status', async () => {
+    it('returns ticket from get_task_status', async () => {
       const deps = dependencies({
         db: fakeDb([TASK_WITH_CONVERSATION]) as never,
         runtimes: conversationRuntimes(vi.fn()) as never,
-        pmTasks: fakePmTasks(),
+        taskTickets: fakeTaskTickets(),
       });
 
       expect(
         parse(await callTool(deps, 'get_task_status', { projectId: 'p', taskId: 'task-1' }))
-      ).toMatchObject({ taskId: 'task-1', pmTask });
+      ).toMatchObject({ taskId: 'task-1', ticket });
     });
 
-    it('rejects a create_task pmTask with a too long id', async () => {
+    it('rejects a create_task ticket with a too long id', async () => {
       const createTask = vi.fn();
-      const deps = dependencies({ tasks: { createTask } as never, pmTasks: fakePmTasks() });
+      const deps = dependencies({ tasks: { createTask } as never, taskTickets: fakeTaskTickets() });
 
       const result = await callTool(deps, 'create_task', {
         projectId: 'p',
-        pmTask: { id: 'x'.repeat(33) },
+        ticket: { id: 'x'.repeat(33) },
       });
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('pmTask.id must be at most 32 characters');
+      expect(result.content[0].text).toContain('ticket.id must be at most 32 characters');
       expect(createTask).not.toHaveBeenCalled();
     });
 
-    it('removes the pmTask when the task is deleted', async () => {
-      const pmTasks = fakePmTasks();
+    it('removes the ticket when the task is deleted', async () => {
+      const taskTickets = fakeTaskTickets();
       const deps = {
         ...deleteDependencies({ deleteTask: vi.fn(async () => ok(undefined)) }),
-        pmTasks,
+        taskTickets,
       };
 
       await callTool(deps, 'delete_task', { projectId: 'p', taskId: 'task-1' });
 
-      expect(pmTasks.delete).toHaveBeenCalledWith('task-1');
+      expect(taskTickets.delete).toHaveBeenCalledWith('task-1');
     });
   });
 

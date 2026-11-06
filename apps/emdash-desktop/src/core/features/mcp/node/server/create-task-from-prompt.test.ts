@@ -279,8 +279,8 @@ describe('createTaskFromPrompt', () => {
   });
 });
 
-describe('createTaskFromPrompt pmTask (fork)', () => {
-  function fakePmTasks(events: string[]) {
+describe('createTaskFromPrompt ticket (fork)', () => {
+  function fakeTaskTickets(events: string[]) {
     return {
       set: vi.fn(async (taskId: string) => {
         events.push(`set:${taskId}`);
@@ -291,68 +291,68 @@ describe('createTaskFromPrompt pmTask (fork)', () => {
     };
   }
 
-  it('stores the pmTask before the task row is created and echoes it', async () => {
+  it('stores the ticket before the task row is created and echoes it', async () => {
     const events: string[] = [];
-    const pmTasks = fakePmTasks(events);
+    const taskTickets = fakeTaskTickets(events);
     const createTask = vi.fn(async (params: CreateTaskParams) => {
       events.push(`create:${params.id}`);
       return ok({});
     });
-    const deps = { ...dependencies({ createTask }), pmTasks } as unknown as McpToolDependencies;
+    const deps = { ...dependencies({ createTask }), taskTickets } as unknown as McpToolDependencies;
 
     const result = await createTaskFromPrompt(deps, {
       projectId: 'project-1',
       name: 'Child task',
       branchName: 'feature/child',
-      pmTask: { id: ' 123 ', title: 'Fix login', managerTaskId: 'task-pm' },
+      ticket: { id: ' 123 ', title: 'Fix login', pmSessionId: 'task-pm' },
     });
 
     expect(result.success).toBe(true);
     if (!result.success) return;
-    const pmTask = { id: '123', title: 'Fix login', managerTaskId: 'task-pm' };
-    expect(result.data.pmTask).toEqual(pmTask);
-    expect(pmTasks.set).toHaveBeenCalledWith(result.data.taskId, pmTask);
+    const ticket = { id: '123', title: 'Fix login', pmSessionId: 'task-pm' };
+    expect(result.data.ticket).toEqual(ticket);
+    expect(taskTickets.set).toHaveBeenCalledWith(result.data.taskId, ticket);
     expect(events).toEqual([`set:${result.data.taskId}`, `create:${result.data.taskId}`]);
   });
 
-  it('rejects an invalid pmTask before creating anything', async () => {
-    const pmTasks = fakePmTasks([]);
+  it('rejects an invalid ticket before creating anything', async () => {
+    const taskTickets = fakeTaskTickets([]);
     const createTask = vi.fn(async () => ok({}));
-    const deps = { ...dependencies({ createTask }), pmTasks } as unknown as McpToolDependencies;
+    const deps = { ...dependencies({ createTask }), taskTickets } as unknown as McpToolDependencies;
 
     const result = await createTaskFromPrompt(deps, {
       projectId: 'project-1',
-      pmTask: { id: 'x'.repeat(33) },
+      ticket: { id: 'x'.repeat(33) },
     });
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid pmTask: pmTask.id must be at most 32 characters',
+      error: 'Invalid ticket: ticket.id must be at most 32 characters',
     });
     expect(createTask).not.toHaveBeenCalled();
-    expect(pmTasks.set).not.toHaveBeenCalled();
+    expect(taskTickets.set).not.toHaveBeenCalled();
   });
 
-  it('removes the stored pmTask when the task cannot be created', async () => {
-    const pmTasks = fakePmTasks([]);
+  it('removes the stored ticket when the task cannot be created', async () => {
+    const taskTickets = fakeTaskTickets([]);
     const createTask = vi.fn(async () => ({ success: false, error: { type: 'boom' } }));
-    const deps = { ...dependencies({ createTask }), pmTasks } as unknown as McpToolDependencies;
+    const deps = { ...dependencies({ createTask }), taskTickets } as unknown as McpToolDependencies;
 
     const result = await createTaskFromPrompt(deps, {
       projectId: 'project-1',
       branchName: 'feature/child',
-      pmTask: { id: '1' },
+      ticket: { id: '1' },
     });
 
     expect(result.success).toBe(false);
-    const [taskId] = pmTasks.set.mock.calls[0] as unknown as [string];
-    expect(pmTasks.delete).toHaveBeenCalledWith(taskId);
+    const [taskId] = taskTickets.set.mock.calls[0] as unknown as [string];
+    expect(taskTickets.delete).toHaveBeenCalledWith(taskId);
   });
 
-  it('stores nothing without a pmTask', async () => {
-    const pmTasks = fakePmTasks([]);
+  it('stores nothing and returns ticket null without a ticket', async () => {
+    const taskTickets = fakeTaskTickets([]);
     const createTask = vi.fn(async () => ok({}));
-    const deps = { ...dependencies({ createTask }), pmTasks } as unknown as McpToolDependencies;
+    const deps = { ...dependencies({ createTask }), taskTickets } as unknown as McpToolDependencies;
 
     const result = await createTaskFromPrompt(deps, {
       projectId: 'project-1',
@@ -360,7 +360,7 @@ describe('createTaskFromPrompt pmTask (fork)', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.success && 'pmTask' in result.data).toBe(false);
-    expect(pmTasks.set).not.toHaveBeenCalled();
+    expect(result.success && result.data.ticket).toBeNull();
+    expect(taskTickets.set).not.toHaveBeenCalled();
   });
 });

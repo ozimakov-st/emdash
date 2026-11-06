@@ -63,12 +63,12 @@ import {
   type PromptLibraryKV,
 } from '@core/features/library/node/prompt-library-service';
 import { LocalSettingsSync } from '@core/features/machines/node/local-settings-sync';
-import { OZDASH_PM_TASKS_CHANNEL } from '@core/features/mcp/api/ozdash-pm-task';
+import { OZDASH_TASK_TICKETS_CHANNEL } from '@core/features/mcp/api/ozdash-task-ticket';
 import {
   createEmdashMcpServer,
   type EmdashMcpServerHandle,
 } from '@core/features/mcp/node/server/create-mcp-server';
-import { createPmTaskStore } from '@core/features/mcp/node/server/ozdash-pm-task-store';
+import { createTaskTicketStore } from '@core/features/mcp/node/server/ozdash-task-ticket-store';
 import { previewServerService } from '@core/features/preview-servers/api/node/preview-server-service-instance';
 import { PreviewServerAccessService } from '@core/features/preview-servers/node/preview-server-access-service';
 import type { ProjectAttachmentManager } from '@core/features/projects/api/node/project-attachment-manager';
@@ -899,10 +899,16 @@ export async function bootServices(
     workspaceIdentity,
   });
   appScope.add(() => mcpServer.stop());
-  // Fork (ozimakov-st): PM task markers for the renderer (see ozdash-pm-task-store.ts).
-  const pmTaskStore = createPmTaskStore(db, log);
-  ipcMain.handle(OZDASH_PM_TASKS_CHANNEL, () => pmTaskStore.listInfos());
-  appScope.add(() => ipcMain.removeHandler(OZDASH_PM_TASKS_CHANNEL));
+  // Fork (ozimakov-st): task ticket markers for the renderer (see ozdash-task-ticket-store.ts).
+  const taskTicketStore = createTaskTicketStore(db, log);
+  const ticketsMigrated = taskTicketStore.migrateLegacyEntries().catch((error) => {
+    log.warn('ozdash: could not move old PM task markers', { error: String(error) });
+  });
+  ipcMain.handle(OZDASH_TASK_TICKETS_CHANNEL, async () => {
+    await ticketsMigrated;
+    return taskTicketStore.listInfos();
+  });
+  appScope.add(() => ipcMain.removeHandler(OZDASH_TASK_TICKETS_CHANNEL));
   return {
     account: accountService,
     automations: automationsService,

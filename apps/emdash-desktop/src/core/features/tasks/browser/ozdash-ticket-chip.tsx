@@ -1,29 +1,29 @@
-// Fork (ozimakov-st): task header chip for a task that a PM session controls.
-// Clicking it opens the manager task, when that task still exists.
+// Fork (ozimakov-st): task header chip for a task that a ticket's PM session controls.
+// Clicking it opens the PM session, when that task still exists.
 import { Tooltip } from '@emdash/ui/react/primitives';
 import { ClipboardList } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { usePmTaskInfo } from '@core/features/mcp/api/browser/ozdash-pm-tasks';
-import { pmTaskChipText, pmTaskTooltip } from '@core/features/mcp/api/ozdash-pm-task';
+import { useTaskTicketInfo } from '@core/features/mcp/api/browser/ozdash-task-tickets';
+import { ticketChipText, ticketTooltip } from '@core/features/mcp/api/ozdash-task-ticket';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 
-export const OzdashPmTaskChip = observer(function OzdashPmTaskChip({ taskId }: { taskId: string }) {
-  const info = usePmTaskInfo(taskId);
+export const OzdashTicketChip = observer(function OzdashTicketChip({ taskId }: { taskId: string }) {
+  const info = useTaskTicketInfo(taskId);
   const { navigate } = useNavigate();
   if (!info) return null;
-  const { label, title } = pmTaskChipText(info.pmTask);
-  const { manager } = info;
+  const { label, title } = ticketChipText(info.ticket);
+  const { pmSession } = info;
   return (
     <Tooltip.Root>
       <Tooltip.Trigger
         render={
           <button
             type="button"
-            disabled={!manager}
+            disabled={!pmSession}
             onClick={() => {
-              if (manager)
-                navigate(taskViewDef({ projectId: manager.projectId, taskId: manager.taskId }));
+              if (pmSession)
+                navigate(taskViewDef({ projectId: pmSession.projectId, taskId: pmSession.taskId }));
             }}
             className="hover:bg-muted/30 flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs text-foreground-info disabled:cursor-default"
           >
@@ -33,7 +33,7 @@ export const OzdashPmTaskChip = observer(function OzdashPmTaskChip({ taskId }: {
           </button>
         }
       />
-      <Tooltip.Content>{pmTaskTooltip(info)}</Tooltip.Content>
+      <Tooltip.Content>{ticketTooltip(info)}</Tooltip.Content>
     </Tooltip.Root>
   );
 });

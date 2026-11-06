@@ -39,6 +39,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 contextBridge.exposeInMainWorld('ozdash', {
   homeDir: homedir(),
   pmProjectPathOverride: process.env.OZDASH_PM_PROJECT_PATH ?? null,
-  // PM task markers (OZDASH_PM_TASKS_CHANNEL in mcp/api/ozdash-pm-task.ts).
-  listPmTasks: () => ipcRenderer.invoke('ozdash:list-pm-tasks'),
+  // Task ticket markers (OZDASH_TASK_TICKETS_CHANNEL in mcp/api/ozdash-task-ticket.ts).
+  listTaskTickets: () => ipcRenderer.invoke('ozdash:list-task-tickets'),
 });

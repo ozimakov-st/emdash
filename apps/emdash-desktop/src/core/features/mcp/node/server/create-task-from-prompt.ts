@@ -9,7 +9,7 @@ import {
 } from '@core/features/agents/api/node/plugin-registry';
 import { DEFAULT_AGENT_ID } from '@core/features/agents/contributions/settings';
 import type { ProviderSettingsSnapshot } from '@core/features/conversations/api/provider-settings';
-import { parsePmTask, type PmTask } from '@core/features/mcp/api/ozdash-pm-task';
+import { parseTaskTicket, type TaskTicket } from '@core/features/mcp/api/ozdash-task-ticket';
 import {
   generateRandom,
   generateTaskName,
@@ -20,7 +20,7 @@ import { buildWorkspaceConfigFromPreset } from '@core/primitives/workspaces/api'
 import type { AppSettingsService } from '@core/services/settings/node';
 import { withProjectAttachment } from './attach-project';
 import type { McpToolDependencies } from './dependencies';
-import { pmTaskStoreOf } from './ozdash-pm-task-store';
+import { taskTicketStoreOf } from './ozdash-task-ticket-store';
 import { isValidBranchName, resolveFromBranch } from './resolve-from-branch';
 
 export type McpCreateTaskInput = {
@@ -33,8 +33,8 @@ export type McpCreateTaskInput = {
   baseBranch?: string;
   chatUi?: boolean;
   autoApprove?: boolean;
-  /** Fork (ozimakov-st): the PM task that controls this task. */
-  pmTask?: unknown;
+  /** Fork (ozimakov-st): the ticket whose PM session controls this task. */
+  ticket?: unknown;
 };
 
 export type McpCreateTaskResult = {
@@ -57,7 +57,8 @@ export type McpCreateTaskResult = {
   workspacePath: string;
   /** Set when the task exists but its agent was not started. */
   warning?: string;
-  pmTask?: PmTask;
+  /** Fork (ozimakov-st): the ticket passed to create_task, or null. */
+  ticket: TaskTicket | null;
 };
 
 /** Comma-separated provider ids, for error messages and tool descriptions. */
@@ -173,11 +174,11 @@ export async function createTaskFromPrompt(
   // Prompt is optional: with one we start an agent conversation; without one the
   // task is provisioned and left idle for the user to drive later.
   const prompt = input.prompt?.trim() ?? '';
-  let pmTask: PmTask | null = null;
-  if (input.pmTask !== undefined) {
-    const parsed = parsePmTask(input.pmTask);
-    if (!parsed.success) return err(`Invalid pmTask: ${parsed.error}`);
-    pmTask = parsed.data;
+  let ticket: TaskTicket | null = null;
+  if (input.ticket !== undefined) {
+    const parsed = parseTaskTicket(input.ticket);
+    if (!parsed.success) return err(`Invalid ticket: ${parsed.error}`);
+    ticket = parsed.data;
   }
 
   // Provider/model only matter when a prompt starts a conversation; skip
@@ -275,10 +276,10 @@ export async function createTaskFromPrompt(
       };
 
       // Saved before the task row exists, so the sidebar never sees the task unmarked.
-      if (pmTask) await pmTaskStoreOf(dependencies).set(taskId, pmTask);
+      if (ticket) await taskTicketStoreOf(dependencies).set(taskId, ticket);
       const result = await dependencies.tasks.createTask(params);
       if (!result.success) {
-        if (pmTask) await pmTaskStoreOf(dependencies).delete(taskId);
+        if (ticket) await taskTicketStoreOf(dependencies).delete(taskId);
         return err(createTaskErrorMessage(result.error));
       }
 
@@ -323,7 +324,7 @@ export async function createTaskFromPrompt(
     autoApprove,
     workspacePath: created.data.path,
     ...(created.data.warning && { warning: created.data.warning }),
-    ...(pmTask && { pmTask }),
+    ticket,
   });
 }
 

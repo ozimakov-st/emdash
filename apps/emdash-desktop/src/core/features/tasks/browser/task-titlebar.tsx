@@ -55,7 +55,7 @@ import { ActivityBadge } from './components/activity-badge';
 import { AutomationRunPill } from './components/automation-run-pill';
 import { IssueSelector, ProviderLogo } from './components/issue-selector/issue-selector';
 import { PreviewServerPills } from './components/preview-servers/preview-server-pills';
-import { OzdashPmTaskChip } from './ozdash-pm-task-chip';
+import { OzdashTicketChip } from './ozdash-ticket-chip';
 
 export const TaskTitlebar = observer(function TaskTitlebar() {
   const { projectId, taskId } = useTaskViewContext();
@@ -293,7 +293,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
             </Popover.Content>
           </Popover.Root>
           {taskPayload.linkedIssue ? <LinkedIssueBadge issue={taskPayload.linkedIssue} /> : null}
-          <OzdashPmTaskChip taskId={taskId} />
+          <OzdashTicketChip taskId={taskId} />
           {taskPayload.type === 'task' && (
             <button
               className={cn(

@@ -1,19 +1,19 @@
-// Fork (ozimakov-st): renderer cache of PM task markers, read from the main
-// process through `window.ozdash.listPmTasks` (see ozdash-pm-task-store.ts).
+// Fork (ozimakov-st): renderer cache of task ticket markers, read from the main
+// process through `window.ozdash.listTaskTickets` (see ozdash-task-ticket-store.ts).
 import { observable, runInAction } from 'mobx';
 import { useEffect } from 'react';
-import type { PmTaskInfo } from '../ozdash-pm-task';
+import type { TaskTicketInfo } from '../ozdash-task-ticket';
 
-type OzdashBridge = { listPmTasks?: () => Promise<Record<string, PmTaskInfo>> };
+type OzdashBridge = { listTaskTickets?: () => Promise<Record<string, TaskTicketInfo>> };
 
-const infos = observable.map<string, PmTaskInfo>({}, { deep: false });
+const infos = observable.map<string, TaskTicketInfo>({}, { deep: false });
 /** Task ids already seen; a new one triggers a refresh, since its marker may be new. */
 const seen = new Set<string>();
 let pending: Promise<void> | null = null;
 let refreshAgain = false;
 
-function refreshPmTasks(): void {
-  const list = (globalThis as { ozdash?: OzdashBridge }).ozdash?.listPmTasks;
+function refreshTaskTickets(): void {
+  const list = (globalThis as { ozdash?: OzdashBridge }).ozdash?.listTaskTickets;
   if (!list) return;
   if (pending) {
     refreshAgain = true;
@@ -30,17 +30,17 @@ function refreshPmTasks(): void {
       pending = null;
       if (refreshAgain) {
         refreshAgain = false;
-        refreshPmTasks();
+        refreshTaskTickets();
       }
     });
 }
 
-/** The PM marker of a task, or null. Call from an `observer` component. */
-export function usePmTaskInfo(taskId: string): PmTaskInfo | null {
+/** The ticket marker of a task, or null. Call from an `observer` component. */
+export function useTaskTicketInfo(taskId: string): TaskTicketInfo | null {
   useEffect(() => {
     if (seen.has(taskId)) return;
     seen.add(taskId);
-    refreshPmTasks();
+    refreshTaskTickets();
   }, [taskId]);
   return infos.get(taskId) ?? null;
 }

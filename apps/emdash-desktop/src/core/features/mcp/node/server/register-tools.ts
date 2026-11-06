@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import z from 'zod';
-import { pmTaskInputSchema } from '@core/features/mcp/api/ozdash-pm-task';
+import { ticketInputSchema } from '@core/features/mcp/api/ozdash-task-ticket';
 import {
   liveWorkspaces,
   workspaceRegistryTable as workspaces,
@@ -12,7 +12,7 @@ import { addLocalProject } from './add-project';
 import { attachProject } from './attach-project';
 import { createTaskFromPrompt, validProviderIds } from './create-task-from-prompt';
 import type { McpToolDependencies } from './dependencies';
-import { pmTaskStoreOf } from './ozdash-pm-task-store';
+import { taskTicketStoreOf } from './ozdash-task-ticket-store';
 import { runTaskScript, stopTaskScript } from './run-task-script';
 import {
   DEFAULT_STATUS_MAX_CHARS,
@@ -369,7 +369,7 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
             .where(and(inArray(workspaces.id, workspaceIds), liveWorkspaces()))
         : [];
       const workspaceById = new Map(workspaceRows.map((row) => [row.id, row]));
-      const pmTasks = await pmTaskStoreOf(dependencies).getMany(projectTasks.map((t) => t.id));
+      const tickets = await taskTicketStoreOf(dependencies).getMany(projectTasks.map((t) => t.id));
 
       return textResult({
         tasks: projectTasks.map((task) => {
@@ -382,7 +382,7 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
             isArchived: task.archivedAt != null,
             branchName: workspace ? getProvisionedWorkspaceBranch(workspace) : null,
             workspacePath: workspace?.path ?? null,
-            pmTask: pmTasks.get(task.id) ?? null,
+            ticket: tickets.get(task.id) ?? null,
           };
         }),
         truncated,
@@ -460,11 +460,12 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
               'and is ignored for chat UI and providers without an auto-approve mode. The response reports the ' +
               'value that was applied'
           ),
-        pmTask: pmTaskInputSchema
+        ticket: ticketInputSchema
           .optional()
           .describe(
-            'The PM task that controls this task, when a PM (task-manager) session creates it. ' +
-              'Shown as a badge on the task in Emdash and returned by list_tasks and get_task_status'
+            "The ticket (one of Oleg's PM-managed work items) whose PM session controls this task, " +
+              'when a PM session creates it. Shown as a badge on the task in OZdash and returned by ' +
+              'list_tasks and get_task_status'
           ),
       },
       annotations: { destructiveHint: false, openWorldHint: false },
@@ -620,7 +621,7 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
           deleteBranch: decision.deleteBranch,
           deleteConversations,
         });
-        await pmTaskStoreOf(dependencies).delete(taskId);
+        await taskTicketStoreOf(dependencies).delete(taskId);
       } finally {
         await attached.data.release();
       }
@@ -751,8 +752,8 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
     guarded(dependencies, 'get_task_status', async (input) => {
       const result = await getTaskStatus(dependencies, input);
       if (!result.success) return errorResult(result.error);
-      const pmTask = await pmTaskStoreOf(dependencies).get(input.taskId);
-      return textResult({ ...result.data, pmTask });
+      const ticket = await taskTicketStoreOf(dependencies).get(input.taskId);
+      return textResult({ ...result.data, ticket });
     })
   );
 
