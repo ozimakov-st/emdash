@@ -52,7 +52,6 @@ import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { linkedIssueDisplayIdentifier, type LinkedIssue } from '@core/primitives/linked-issues/api';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
-import { ActivityBadge } from './components/activity-badge';
 import { AutomationRunPill } from './components/automation-run-pill';
 import { IssueSelector, ProviderLogo } from './components/issue-selector/issue-selector';
 import { PreviewServerPills } from './components/preview-servers/preview-server-pills';
@@ -317,15 +316,18 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
       }
       rightSlot={
         <div className="flex items-center gap-2">
-          <ActivityBadge projectId={projectId} taskId={taskId} />
+          {/* OZdash: no Activity badge; "Open in" stays mounted but hidden so Mod+O and
+              the "Open in Editor" palette command keep working. */}
           <PreviewServerPills />
-          <OpenInMenu
-            path={workspace.path}
-            className="h-7 bg-transparent"
-            borderless
-            isRemote={isRemoteProject}
-            sshConnectionId={workspace.sshConnectionId}
-          />
+          <div className="hidden">
+            <OpenInMenu
+              path={workspace.path}
+              className="h-7 bg-transparent"
+              borderless
+              isRemote={isRemoteProject}
+              sshConnectionId={workspace.sshConnectionId}
+            />
+          </div>
           <Separator orientation="vertical" className="h-5 self-center!" />
           <Tooltip.Root>
             <Tooltip.Trigger>
