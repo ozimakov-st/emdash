@@ -170,6 +170,7 @@ import { browserWebContentsRegistry } from '@main/host/browser/browser-webconten
 import { HostAttachmentRegistry } from '@main/host/host-attachment-registry';
 import { createSystemNotificationSink } from '@main/host/notifications/system-notification-sink';
 import { registerOzdashAttentionBadge } from '@main/host/ozdash-attention-badge';
+import { installOzdashAttentionChime } from '@main/host/ozdash-attention-chime';
 import { createOzdashTicketsIssueProvider, registerOzdashTickets } from '@main/host/ozdash-tickets';
 import { encryptedAppSecretsStore } from '@main/host/secrets/encrypted-app-secrets-store';
 import { toPlaintextSecretStore } from '@main/host/secrets/plaintext-secret-store';
@@ -918,6 +919,16 @@ export async function bootServices(
   appScope.add(registerOzdashTickets(mcpServer.dependencies, log));
   // OZdash: Dock badge with the number of tasks that need attention.
   appScope.add(registerOzdashAttentionBadge());
+  // OZdash: Glass chime + macOS banner when a task comes back to Oleg.
+  appScope.add(
+    installOzdashAttentionChime(
+      db,
+      agentStatusService,
+      appSettingsService,
+      notificationService,
+      log
+    )
+  );
   return {
     account: accountService,
     automations: automationsService,

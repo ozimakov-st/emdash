@@ -2,6 +2,7 @@ import type { AgentEvent } from '@core/primitives/agents/api';
 import type { NotificationSettings } from '@core/primitives/app-settings/api';
 import type { AppDb } from '@core/services/app-db/node/db';
 import type { EmitNotificationDelivery, NotificationSink } from '../api/ports';
+import { defaultRoutingPolicy } from '../api/routing';
 import { NotificationService, type NotificationServiceDeps } from './notification-service';
 import { installAgentStatusNotificationProducer } from './producers';
 import { createSoundNotificationSink } from './sinks';
@@ -25,6 +26,12 @@ export function createNotificationService(
   const service = new NotificationService({
     store: new SqliteNotificationStore(deps.db),
     logger: deps.logger,
+    // OZdash: agent chimes and banners come from main/host/ozdash-attention-chime.ts.
+    // The feed still records them; only the renderer tone and the banner are skipped.
+    routingPolicy: (notification, context) =>
+      notification.kind.startsWith('agent-')
+        ? { system: false, sound: false }
+        : defaultRoutingPolicy(notification, context),
     async routingContext() {
       return {
         appFocused: deps.isAppFocused(),
