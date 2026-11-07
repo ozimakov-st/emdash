@@ -4,7 +4,6 @@ import React from 'react';
 import { automationsViewDef } from '@core/features/automations/contributions/views';
 import { settingsViewDef } from '@core/features/settings/contributions/views';
 import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
-import { WORKBENCH_BOTTOM_BAR_HEIGHT_PX } from '@core/primitives/layouts/api/workbench-layout';
 import {
   isCurrentView,
   useNavigate,
@@ -26,7 +25,6 @@ import {
 import { SidebarSearchTrigger } from './sidebar-search-trigger';
 import { SidebarSpace } from './sidebar-space';
 import { SidebarVirtualList } from './sidebar-virtual-list';
-import { UpdateSection } from './update-section';
 import { useSidebarDrop } from './use-sidebar-drop';
 
 export const LeftSidebar: React.FC = observer(function LeftSidebar() {
@@ -97,13 +95,8 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
             </OzdashNavGroup>
           </SidebarMenu>
         </SidebarFooter>
-        <div
-          className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3"
-          style={{ height: WORKBENCH_BOTTOM_BAR_HEIGHT_PX }}
-        >
-          {/* OZdash: no "Give feedback" button here. */}
-          <UpdateSection />
-        </div>
+        {/* OZdash: no bottom bar (it held "Give feedback" and the version / Update button).
+            Updates stay in Settings > General. */}
       </SidebarContainer>
     </div>
   );
