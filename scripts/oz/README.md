@@ -24,7 +24,7 @@ PM session task `ticket-<id>-<slug>` with `/oz-pm <id>`, and syncs once. A PM ta
 that no ticket points to shows "no ticket"; its header chip can link it to a ticket
 or create a ticket for it.
 
-- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has the same signature and macOS asks for keychain access only once.
+- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
   originals. Run with `swift <script> <upstream png> <out png>`. Make the `.icns`
