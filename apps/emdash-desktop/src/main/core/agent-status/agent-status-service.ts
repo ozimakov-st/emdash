@@ -138,16 +138,21 @@ export class AgentStatusService implements Hookable<AgentStatusServiceHooks> {
   }
 
   private async resetToIdleQueued(conversationId: string): Promise<void> {
+    // OZdash: keep the seen flag. A session that exits or a lost worker is not Oleg
+    // viewing the conversation (see ozdash/api/attention.ts).
     const [row] = await getAppDb()
       .update(conversations)
-      .set({ agentStatus: 'idle', agentStatusSeen: 1 })
+      .set({ agentStatus: 'idle' })
       .where(
         and(
           eq(conversations.id, conversationId),
           inArray(conversations.agentStatus, ['working', 'awaiting-input'])
         )
       )
-      .returning(conversationContextSelection());
+      .returning({
+        ...conversationContextSelection(),
+        agentStatusSeen: conversations.agentStatusSeen,
+      });
     if (!row) return;
     if (row.projectId === null || row.taskId === null) return;
 
@@ -157,7 +162,7 @@ export class AgentStatusService implements Hookable<AgentStatusServiceHooks> {
       taskId: row.taskId,
       projectId: row.projectId,
       status: 'idle',
-      seen: true,
+      seen: row.agentStatusSeen !== 0,
     });
   }
 

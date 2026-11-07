@@ -7,7 +7,9 @@ export async function resetStaleAcpAgentStatuses(db: AppDb): Promise<void> {
   try {
     await db
       .update(conversations)
-      .set({ agentStatus: 'idle', agentStatusSeen: 1 })
+      // OZdash: keep the seen flag. A restart is not Oleg viewing the conversation, so a
+      // wait he has not seen yet stays highlighted (see ozdash/api/attention.ts).
+      .set({ agentStatus: 'idle' })
       .where(
         and(
           eq(conversations.type, 'acp'),

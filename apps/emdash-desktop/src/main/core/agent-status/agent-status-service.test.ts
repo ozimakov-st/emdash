@@ -181,6 +181,20 @@ describe('AgentStatusService', () => {
     );
   });
 
+  // OZdash: a session that exits is not Oleg viewing it (ozdash/api/attention.ts).
+  it('keeps the seen flag when it resets a conversation to idle', async () => {
+    const service = new AgentStatusService();
+    mocks.updateRows.push(row({ agentStatusSeen: 0 }));
+
+    await service.resetToIdle({ conversationId: 'conversation-1' });
+
+    expect(mocks.updateCalls).toEqual([{ agentStatus: 'idle' }]);
+    expect(mocks.emit).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ status: 'idle', seen: false })
+    );
+  });
+
   it('waits for queued writes before disposing', async () => {
     const service = new AgentStatusService();
     mocks.blockUpdates = true;

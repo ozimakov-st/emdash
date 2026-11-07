@@ -53,6 +53,37 @@ describe('agent status host scoping', () => {
     expect(statusOf('remote-tui')).toBe('awaiting-input');
   });
 
+  // OZdash: a restart is not Oleg viewing the conversation (ozdash/api/attention.ts).
+  it('keeps the seen flag when it repairs stale statuses at boot', async () => {
+    seedConversation('unseen-tui', 'pty', 'local', null, 'awaiting-input');
+    seedConversation('seen-tui', 'pty', 'local', null, 'awaiting-input');
+    seedConversation('unseen-acp', 'acp', 'local', null, 'awaiting-input');
+    setSeen('unseen-tui', 0);
+    setSeen('seen-tui', 1);
+    setSeen('unseen-acp', 0);
+
+    await resetStaleAcpAgentStatuses(fixture.db);
+    await resetStaleTuiAgentStatuses(fixture.db);
+
+    expect([statusOf('unseen-tui'), seenOf('unseen-tui')]).toEqual(['idle', 0]);
+    expect([statusOf('seen-tui'), seenOf('seen-tui')]).toEqual(['idle', 1]);
+    expect([statusOf('unseen-acp'), seenOf('unseen-acp')]).toEqual(['idle', 0]);
+  });
+
+  function setSeen(id: string, seen: 0 | 1): void {
+    fixture.sqlite
+      .prepare('UPDATE conversations SET agent_status_seen = ? WHERE id = ?')
+      .run(seen, id);
+  }
+
+  function seenOf(id: string): number | null {
+    return (
+      fixture.sqlite
+        .prepare('SELECT agent_status_seen AS seen FROM conversations WHERE id = ?')
+        .get(id) as { seen: number | null }
+    ).seen;
+  }
+
   function seedConversation(
     id: string,
     type: 'acp' | 'pty',

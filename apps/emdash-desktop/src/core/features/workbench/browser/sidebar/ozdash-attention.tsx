@@ -13,10 +13,14 @@ const LABEL: Record<AttentionLevel, string> = {
   done: 'Finished, not seen yet',
 };
 
-/** Row background for a task that needs attention. */
+/**
+ * Row background for a task that needs attention. The warning background (amber-3) is
+ * pale, so a low opacity of it does not show: 'input' uses it in full with an amber
+ * outline, 'done' uses it at 70%.
+ */
 export function ozdashAttentionRowClass(level: AttentionLevel | null): string | false {
-  if (level === 'input') return 'bg-background-warning/40';
-  if (level === 'done') return 'bg-background-warning/15';
+  if (level === 'input') return 'bg-background-warning ring-1 ring-inset ring-border-warning';
+  if (level === 'done') return 'bg-background-warning/70';
   return false;
 }
 
