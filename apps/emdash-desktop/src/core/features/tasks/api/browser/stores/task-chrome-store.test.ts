@@ -2,6 +2,7 @@ import { observable, reaction, runInAction } from 'mobx';
 import { describe, expect, it } from 'vitest';
 import {
   taskChromeMemento,
+  taskChromeSchema,
   type TaskChromeState,
 } from '@core/features/tasks/contributions/mementos';
 import { createChromeStore } from '@core/primitives/chrome-stores/browser';
@@ -109,6 +110,20 @@ describe('taskChromeStore sidebar commands', () => {
 
     expect(store.state.sidebarTab).toBe('changes');
     expect(store.state.sidebarCollapsed).toBe(false);
+  });
+
+  // Fork (ozimakov-st): the OZdash Ticket panel is one more sidebar tab.
+  it('the ticket tab opens, closes and is stored like the other tabs', () => {
+    const store = createStore({ sidebarCollapsed: true, sidebarTab: 'changes' });
+
+    store.commands.openSidebarTab('ticket');
+    expect(store.state).toMatchObject({ sidebarTab: 'ticket', sidebarCollapsed: false });
+
+    store.commands.toggleSidebarTab('ticket');
+    expect(store.state).toMatchObject({ sidebarTab: 'ticket', sidebarCollapsed: true });
+
+    const stored = taskChromeSchema.serialize(store.state);
+    expect(taskChromeSchema.parseJson(stored)).toEqual(store.state);
   });
 
   it('sidebar commands leave focusedRegion alone', () => {

@@ -20,13 +20,15 @@ start one with `/oz-pm <id>`). A parked row has Start and Archive (-> dropped); 
 archived row has Restore (-> parked). Each write changes the ticket and then syncs the
 vault repo (add, commit, pull --rebase --autostash, push).
 "New task…" on an open card starts a task for the ticket in another project.
-Cards and rows have a P-chip with ▲/▼ (P1-P4, debounced into one write), cards a
+Cards and rows have a read-only P-chip (P1-P4). ▲/▼ to change it (debounced into one
+write) are in the parked row's popup and in a task's Ticket panel. Cards have a
 **Park** button and the Goal (3 lines); drag a card to reorder it within its priority
 group (writes `rank:` 10, 20, 30…). Colors per priority: `ozdash/api/priority-palette.ts`.
 Each ticket shows a pixel icon: its `icon.svg`, else a sprite made from its id. OZdash
 generates missing `icon.svg` files in the background with the Claude CLI (haiku, no
 tools, one at a time); turn this off with `OZDASH_TICKET_ICONS=off`.
-A task that is a ticket's PM session or child task shows a collapsible ticket card on top.
+A task that is a ticket's PM session or child task gets a **Ticket** toggle in its
+titlebar (next to Changes / Files / Conversations): a right sidebar tab with the ticket.
 
 Lifecycle: a ticket becomes `active` (Log `Started (<reason>)`) as soon as it gets a
 session: Start / card open, a linked PM session, or a child task (OZ Tickets, "New

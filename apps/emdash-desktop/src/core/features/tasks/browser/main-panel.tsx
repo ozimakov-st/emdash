@@ -2,8 +2,6 @@ import { Button, Resizable, toast, useCollapsiblePanelBinding } from '@emdash/ui
 import { Loader2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useState } from 'react';
-// Fork (ozimakov-st): ticket panel above the task's main column.
-import { OzdashTicketPanel } from '@core/features/ozdash/contributions/browser';
 import {
   getTaskManagerStore,
   getTaskStore,
@@ -349,7 +347,6 @@ const SIDEBAR_MIN_SIZE = '280px';
 
 const ReadyTaskMainPanel = observer(function ReadyTaskMainPanel() {
   const taskView = useTaskComposition();
-  const { taskId } = useTaskViewContext();
   // Zen is workspace-chrome data; the task sidebar hides while zen is active
   // as a derived condition — no task-chrome mutation, no task-side restore.
   const { isZenActive } = useWorkspaceLayoutContext();
@@ -377,13 +374,7 @@ const ReadyTaskMainPanel = observer(function ReadyTaskMainPanel() {
     <taskTabView.TabLayoutProvider layout={taskView.paneLayout}>
       <Resizable.Group id="task-sidebar-layout" {...sidebarBinding.groupProps}>
         <Resizable.Panel id="task-main-area">
-          {/* Fork (ozimakov-st): the ticket panel (renders nothing without a ticket). */}
-          <div className="flex h-full min-h-0 flex-col">
-            <OzdashTicketPanel taskId={taskId} />
-            <div className="min-h-0 flex-1">
-              <TaskMainColumn />
-            </div>
-          </div>
+          <TaskMainColumn />
         </Resizable.Panel>
         {/* Collapsed = panel AND handle unmounted (sync contract: never
             program the panels). */}

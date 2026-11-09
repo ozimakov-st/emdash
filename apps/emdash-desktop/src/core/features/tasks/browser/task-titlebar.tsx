@@ -22,7 +22,10 @@ import {
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { ConnectionStatusDot } from '@core/features/machines/contributions/browser/connection-status-dot';
-import { OzdashNoTicketChip } from '@core/features/ozdash/contributions/browser';
+import {
+  OzdashNoTicketChip,
+  OzdashTicketSidebarToggle,
+} from '@core/features/ozdash/contributions/browser';
 import {
   asAvailableProject,
   getProjectStore,
@@ -416,6 +419,8 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
                 <BoundShortcut command="task.sidebarConversations" variant="keycaps" />
               </Tooltip.Content>
             </Tooltip.Root>
+            {/* Fork (ozimakov-st): the Ticket panel (only for a task with a ticket). */}
+            <OzdashTicketSidebarToggle taskId={taskId} />
           </ToggleGroup.Root>
         </div>
       }

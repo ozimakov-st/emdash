@@ -1,6 +1,8 @@
 import { observer } from 'mobx-react-lite';
 import { SidebarConversationsList } from '@core/features/conversations/contributions/browser/sidebar-conversations-list';
 import { EditorFileTree } from '@core/features/editor/contributions/browser/editor-file-tree';
+// Fork (ozimakov-st): the OZdash Ticket panel as a sidebar tab.
+import { OzdashTicketPanel } from '@core/features/ozdash/contributions/browser';
 import { ChangesPanel } from '@core/features/source-control/contributions/browser/changes-panel';
 import { useTaskComposition } from '@core/features/workbench/api/browser/task-composition-context';
 
@@ -27,6 +29,7 @@ export const TaskSidebar = observer(function TaskSidebar() {
       {activeTab === 'conversations' && <SidebarConversationsList />}
       {activeTab === 'changes' && <ChangesPanel />}
       {activeTab === 'files' && <EditorFileTree />}
+      {activeTab === 'ticket' && <OzdashTicketPanel taskId={taskView.taskId} />}
     </div>
   );
 });
