@@ -9,6 +9,7 @@ import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Logger } from '@emdash/shared/logger';
+import { ICON_FILE, ICON_MAX_BYTES, validatePixelSvg } from '../api/ticket-icon';
 import {
   canPark,
   effectivePriority,
@@ -63,6 +64,18 @@ export function resolveVaultPath(override: string | undefined, homeDir: string):
   return raw;
 }
 
+/** A ticket folder's `icon.svg` when it passes the strict check, else null. */
+async function readIcon(folderPath: string): Promise<string | null> {
+  try {
+    const path = join(folderPath, ICON_FILE);
+    if ((await stat(path)).size > ICON_MAX_BYTES) return null;
+    const checked = validatePixelSvg(await readFile(path, 'utf8'));
+    return checked.success ? checked.svg : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Reads every `tickets/*\/ticket.md`; files that do not parse become warnings. */
 export async function readTickets(vaultPath: string): Promise<TicketList> {
   const ticketsDir = join(vaultPath, 'tickets');
@@ -87,8 +100,11 @@ export async function readTickets(vaultPath: string): Promise<TicketList> {
       continue; // A folder without ticket.md (for example one being created).
     }
     const parsed = parseTicket(content, folder);
-    if (parsed.success) result.tickets.push(parsed.ticket);
-    else result.warnings.push(`tickets/${folder}/ticket.md: ${parsed.error}`);
+    if (parsed.success) {
+      const icon = await readIcon(join(ticketsDir, folder));
+      if (icon) parsed.ticket.icon = icon;
+      result.tickets.push(parsed.ticket);
+    } else result.warnings.push(`tickets/${folder}/ticket.md: ${parsed.error}`);
   }
   return result;
 }
@@ -155,6 +171,8 @@ export interface TicketsService {
   reorder(folders: readonly string[]): Promise<TicketActionResult>;
   /** A ticket that is not parked or archived -> parked, with a Log line, then syncs. */
   park(folder: string): Promise<TicketActionResult>;
+  /** Commits and pushes the vault now (after other writes), for example new icons. */
+  sync(message: string): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
 }
@@ -478,6 +496,11 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
 
     reorder(folders) {
       return serialize(() => reorder(folders));
+    },
+
+    async sync(message) {
+      const warning = await serialize(() => syncNow(message));
+      return warning ? { success: false, error: warning } : { success: true };
     },
 
     park(folder) {

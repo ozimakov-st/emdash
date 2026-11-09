@@ -89,6 +89,7 @@ import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useMemento } from '@core/primitives/mementos/react';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
+import { TicketIcon } from './ticket-icon';
 
 type Notice = { tone: 'error' | 'warning'; text: string };
 
@@ -585,6 +586,7 @@ function TicketCard({ ticket, vaultPath, busy, onOpen, onPark, drag }: TicketCar
       )}
     >
       <div className="flex items-center gap-1.5 text-xs">
+        <TicketIcon ticket={ticket} size={24} />
         <span className="font-semibold text-foreground-info">#{ticket.id}</span>
         <PriorityControl ticket={ticket} />
         {ticket.status === 'blocked' && <Badge variant="outline">blocked</Badge>}
@@ -691,6 +693,7 @@ function RowSummary({ ticket, busy }: { ticket: TicketSummary; busy: boolean }) 
   const updated = relativeUpdated(ticket.updated, new Date());
   return (
     <>
+      <TicketIcon ticket={ticket} size={16} />
       <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
       <PriorityControl ticket={ticket} />
       <span className="min-w-0 flex-1 truncate text-foreground" title={ticket.title}>
@@ -790,6 +793,7 @@ function ParkedRow({
           className="flex w-72 flex-col gap-2 p-3"
         >
           <div className="flex items-center gap-1.5 text-xs">
+            <TicketIcon ticket={ticket} size={24} />
             <span className="font-semibold text-foreground-info">#{ticket.id}</span>
             <PriorityChip priority={ticket.priority} />
           </div>

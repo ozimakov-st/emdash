@@ -76,6 +76,22 @@ describe('tickets service', () => {
     expect((await readTickets(join(vault, 'missing'))).error).toMatch(/^No vault at /);
   });
 
+  it('lists a valid icon.svg with the ticket; an invalid one is left out', async () => {
+    const icon =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="1" y="1" width="2" height="2" fill="#0f0"/></svg>';
+    write('1-a', ticketText('1', 'active'));
+    write('2-b', ticketText('2', 'active'));
+    write('3-c', ticketText('3', 'active'));
+    writeFileSync(join(vault, 'tickets', '1-a', 'icon.svg'), `${icon}\n`);
+    writeFileSync(join(vault, 'tickets', '2-b', 'icon.svg'), '<svg><script/></svg>');
+    const list = await readTickets(vault);
+    expect(list.tickets.map((t) => [t.id, t.icon ?? null])).toEqual([
+      ['1', icon],
+      ['2', null],
+      ['3', null],
+    ]);
+  });
+
   it('restores an archived ticket to parked and syncs the vault', async () => {
     write('5-old', ticketText('5', 'done'));
     const service = createTicketsService({

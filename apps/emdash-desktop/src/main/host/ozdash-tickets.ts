@@ -20,6 +20,11 @@ import {
   type LinkPmSessionInput,
 } from '@core/features/ozdash/api/tickets';
 import { linkTicketTask } from '@core/features/ozdash/node/link-ticket-task';
+import {
+  claudeIconRunner,
+  createIconGenerator,
+  ticketIconsEnabled,
+} from '@core/features/ozdash/node/ticket-icons';
 import { createTicketsService, resolveVaultPath } from '@core/features/ozdash/node/tickets-service';
 import { projects, tasks } from '@core/services/app-db/node/schema';
 
@@ -239,15 +244,30 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       ? service.park(folder)
       : { success: false, error: 'Invalid ticket folder' }
   );
+  // Pixel icons for tickets without `icon.svg` (background, one at a time).
+  const icons = ticketIconsEnabled(process.env)
+    ? createIconGenerator({
+        vaultPath: service.vaultPath,
+        logger,
+        generate: claudeIconRunner(homedir()),
+        sync: async () => {
+          const synced = await service.sync('tickets: icons (OZdash)');
+          if (!synced.success)
+            logger.warn('ozdash icons: vault sync failed', { error: synced.error });
+        },
+      })
+    : null;
   const stopWatching = service.watch((next) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(changed, next);
     }
+    if (!next.error) icons?.update(next.tickets);
   });
   logger.info('ozdash tickets: watching the vault', { vaultPath: service.vaultPath });
 
   return () => {
     stopWatching();
+    icons?.dispose();
     onTicketTaskCreated = null;
     ipcMain.removeHandler(list);
     ipcMain.removeHandler(restore);
