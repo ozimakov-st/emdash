@@ -18,6 +18,10 @@ import {
 } from './types';
 
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
+// OZdash: how long to wait for `close` after the child has exited. A descendant that inherited
+// stdout/stderr (a daemon, an orphaned helper, a process that left the group) keeps the pipes
+// open, so `close` may never fire and the exec would hang forever.
+const EXIT_CLOSE_GRACE_MS = 2_000;
 
 export type CreateBoundExecOptions = {
   file: string;
@@ -185,8 +189,20 @@ class ProcessBoundExec implements BoundExec {
       options.signal?.addEventListener('abort', abort, { once: true });
       if (options.signal?.aborted) abort();
 
+      // OZdash: once the child has exited, stop waiting on pipes a descendant may hold open.
+      // Destroying them lets Node emit `close`, so the handler below still settles the call.
+      let exitGrace: ReturnType<typeof setTimeout> | undefined;
+      child.once('exit', () => {
+        exitGrace = setTimeout(() => {
+          child.stdout?.destroy();
+          child.stderr?.destroy();
+        }, EXIT_CLOSE_GRACE_MS);
+        exitGrace.unref?.();
+      });
+
       function cleanup(): void {
         if (timeout) clearTimeout(timeout);
+        if (exitGrace) clearTimeout(exitGrace);
         options.signal?.removeEventListener('abort', abort);
       }
 

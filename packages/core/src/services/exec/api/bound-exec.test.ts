@@ -1,7 +1,7 @@
 import type * as ChildProcessModule from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -283,6 +283,93 @@ describe('BoundExec', () => {
 
     expect(isProcessAlive(pid)).toBe(false);
   });
+});
+
+// OZdash: an exec that fails to spawn, or whose child exits while a descendant still holds its
+// output pipes, must settle so callers (the git repository lane) never wait forever.
+describe('BoundExec settlement', () => {
+  it('settles a spawn ENOENT for a missing cwd and works once the cwd exists', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'emdash-shared-exec-cwd-'));
+    const cwd = path.join(root, 'worktree');
+    const exec = createBoundExec({ file: process.execPath, cwd });
+    try {
+      // Node reports a missing cwd as `spawn <file> ENOENT`, as if the executable were missing.
+      await expect(exec.exec(['-p', '1'])).rejects.toMatchObject({
+        name: 'ExecError',
+        cause: { code: 'ENOENT' },
+      });
+      await mkdir(cwd);
+      await expect(exec.exec(['-p', '1'])).resolves.toMatchObject({ stdout: '1\n' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('settles a spawn ENOENT for a missing executable and works once it is back', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'emdash-shared-exec-bin-gone-'));
+    const file = path.join(dir, 'git');
+    const exec = createBoundExec({ file, cwd: dir });
+    try {
+      await expect(exec.exec(['status'])).rejects.toMatchObject({
+        name: 'ExecError',
+        cause: { code: 'ENOENT', path: file },
+      });
+      await writeFile(file, '#!/bin/sh\necho "ok $1"\n');
+      await chmod(file, 0o755);
+      await expect(exec.exec(['status'])).resolves.toMatchObject({ stdout: 'ok status\n' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'settles when the child exits but a background process keeps its output open',
+    async () => {
+      const cwd = await mkdtemp(path.join(tmpdir(), 'emdash-shared-exec-orphan-'));
+      // The background sleep inherits stdout/stderr, so `close` would not fire for 30s.
+      const started = Date.now();
+      const { stdout } = await createBoundExec({ file: '/bin/sh', cwd }).exec([
+        '-c',
+        'sleep 30 & echo "$!"',
+      ]);
+      const pid = Number.parseInt(stdout.trim(), 10);
+      try {
+        expect(Date.now() - started).toBeLessThan(10_000);
+        expect(pid).toBeGreaterThan(0);
+      } finally {
+        if (isProcessAlive(pid)) process.kill(pid, 'SIGKILL');
+        await rm(cwd, { recursive: true, force: true });
+      }
+    },
+    15_000
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'settles a timed-out child even when a detached descendant holds its output',
+    async () => {
+      const cwd = await mkdtemp(path.join(tmpdir(), 'emdash-shared-exec-timeout-orphan-'));
+      const pidPath = path.join(cwd, 'pid');
+      // `setsid`-like escape: the descendant leaves the process group, so the timeout's group
+      // kill cannot reach it and it keeps stdout open after the shell dies.
+      const script = [
+        "const { spawn } = require('node:child_process');",
+        "const child = spawn('sleep', ['30'], { detached: true, stdio: ['ignore', 'inherit', 'inherit'] });",
+        `require('node:fs').writeFileSync(${JSON.stringify(pidPath)}, String(child.pid));`,
+        'setInterval(() => {}, 1000);',
+      ].join(' ');
+      const execution = createBoundExec({ file: process.execPath, cwd }).exec(['-e', script], {
+        timeoutMs: 500,
+      });
+      try {
+        await expect(execution).rejects.toMatchObject({ stderr: 'Timed out after 500ms' });
+      } finally {
+        const pid = Number.parseInt(await waitForFile(pidPath), 10);
+        if (isProcessAlive(pid)) process.kill(pid, 'SIGKILL');
+        await rm(cwd, { recursive: true, force: true });
+      }
+    },
+    15_000
+  );
 });
 
 function isProcessAlive(pid: number): boolean {
