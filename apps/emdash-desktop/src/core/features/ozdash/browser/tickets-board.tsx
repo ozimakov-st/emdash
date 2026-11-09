@@ -1,7 +1,8 @@
 // Fork (ozimakov-st): the Tickets board. Shown in the PM project's main panel.
 // Columns: Needs Oleg, Active, Waiting. Parked and Archive are toggle panels on the
 // right (compact rows, built for many tickets); their open/closed state survives restarts.
-// Cards and rows have a P-chip with ▲/▼; cards can be dragged within their priority group.
+// Cards and rows have a read-only P-chip; cards can be dragged within their priority group.
+// The priority is changed in the parked ticket popup and in the task's Ticket panel.
 import {
   closestCenter,
   DndContext,
@@ -28,7 +29,6 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   CircleHelp,
   Hourglass,
   Pause,
@@ -38,31 +38,16 @@ import {
 } from 'lucide-react';
 import { when } from 'mobx';
 import { observer } from 'mobx-react-lite';
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-  type SyntheticEvent,
-} from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
-import {
-  priorityCardStyle,
-  priorityChipStyle,
-  priorityColor,
-} from '@core/features/ozdash/api/priority-palette';
+import { priorityCardStyle } from '@core/features/ozdash/api/priority-palette';
 import { newTicketSessionModalProps } from '@core/features/ozdash/api/ticket-issues';
 import {
   canPark,
   effectivePriority,
-  goalFirstLine,
   goalPreview,
   groupTickets,
-  MAX_PRIORITY,
-  MIN_PRIORITY,
   panelView,
   relativeUpdated,
   reorderGroup,
@@ -89,6 +74,8 @@ import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useMemento } from '@core/primitives/mementos/react';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
+import { ExpandableText } from './expandable-text';
+import { PriorityChip, PriorityControl, stopEvent } from './priority-control';
 import { TicketIcon } from './ticket-icon';
 
 type Notice = { tone: 'error' | 'warning'; text: string };
@@ -327,71 +314,6 @@ function ColumnHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-/** Keeps clicks, keys and drags on a control from reaching the card or row. */
-const stopEvent = (event: SyntheticEvent) => event.stopPropagation();
-
-/** A static P-chip in the priority color (missing = P3). */
-function PriorityChip({ priority }: { priority: number | null }) {
-  return (
-    <span
-      className="inline-flex h-4 shrink-0 items-center rounded border px-1 text-[11px] leading-none font-semibold text-foreground tabular-nums"
-      style={priorityChipStyle(priority)}
-      title={`Priority ${effectivePriority(priority)} (${priorityColor(priority).name})`}
-    >
-      P{effectivePriority(priority)}
-    </span>
-  );
-}
-
-const PRIORITY_STEP_CLASS =
-  'flex h-2 w-3.5 items-center justify-center text-foreground-muted hover:bg-background-3 hover:text-foreground disabled:pointer-events-none disabled:opacity-30';
-
-/**
- * The P-chip with ▲ (higher priority = smaller number) and ▼. The board shows each
- * click at once; the file is written when the clicks stop (see TicketsStore.bumpPriority).
- */
-const PriorityControl = observer(function PriorityControl({ ticket }: { ticket: TicketSummary }) {
-  const priority = effectivePriority(ticket.priority);
-  return (
-    <span
-      className="inline-flex h-4 shrink-0 items-stretch overflow-hidden rounded border text-[11px] leading-none font-semibold text-foreground"
-      style={priorityChipStyle(ticket.priority)}
-      onClick={stopEvent}
-      onKeyDown={stopEvent}
-      onPointerDown={stopEvent}
-    >
-      <span
-        className="flex items-center px-1 tabular-nums"
-        title={`Priority ${priority} (${priorityColor(ticket.priority).name})`}
-      >
-        P{priority}
-      </span>
-      <span className="flex flex-col border-l border-inherit">
-        <button
-          type="button"
-          className={PRIORITY_STEP_CLASS}
-          aria-label={`Raise priority of ticket ${ticket.id}`}
-          title="Higher priority"
-          disabled={priority <= MIN_PRIORITY}
-          onClick={() => ticketsStore.bumpPriority(ticket.folder, 'up')}
-        >
-          <ChevronUp className="size-2.5" strokeWidth={3} />
-        </button>
-        <button
-          type="button"
-          className={PRIORITY_STEP_CLASS}
-          aria-label={`Lower priority of ticket ${ticket.id}`}
-          title="Lower priority"
-          disabled={priority >= MAX_PRIORITY}
-          onClick={() => ticketsStore.bumpPriority(ticket.folder, 'down')}
-        >
-          <ChevronDown className="size-2.5" strokeWidth={3} />
-        </button>
-      </span>
-    </span>
-  );
-});
-
 /** The same priority, one after another (a sorted column), as drag groups. */
 function priorityGroups(tickets: readonly TicketSummary[]): TicketSummary[][] {
   const groups: TicketSummary[][] = [];
@@ -588,7 +510,7 @@ function TicketCard({ ticket, vaultPath, busy, onOpen, onPark, drag }: TicketCar
       <div className="flex items-center gap-1.5 text-xs">
         <TicketIcon ticket={ticket} size={32} />
         <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-        <PriorityControl ticket={ticket} />
+        <PriorityChip priority={ticket.priority} />
         {ticket.status === 'blocked' && <Badge variant="outline">blocked</Badge>}
         <span className="ml-auto flex items-center gap-1">
           {busy && <Spinner size="sm" />}
@@ -695,7 +617,7 @@ function RowSummary({ ticket, busy }: { ticket: TicketSummary; busy: boolean }) 
     <>
       <TicketIcon ticket={ticket} size={16} />
       <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
-      <PriorityControl ticket={ticket} />
+      <PriorityChip priority={ticket.priority} />
       <span className="min-w-0 flex-1 truncate text-foreground" title={ticket.title}>
         {ticket.title}
       </span>
@@ -722,7 +644,8 @@ const ROW_ACTION_CLASS =
 
 /**
  * A parked ticket. ▶ starts it, the box archives it (-> dropped). A click on the row
- * asks first (Goal + Start / Archive), so a stray click does not start a session.
+ * asks first (a popup: priority ▲/▼, the Goal with "Show more", Start / Archive), so a
+ * stray click does not start a session.
  */
 function ParkedRow({
   ticket,
@@ -737,7 +660,6 @@ function ParkedRow({
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [confirming, setConfirming] = useState(false);
-  const goal = goalFirstLine(ticket.goal);
   return (
     <>
       <div
@@ -795,10 +717,14 @@ function ParkedRow({
           <div className="flex items-center gap-1.5 text-xs">
             <TicketIcon ticket={ticket} size={32} />
             <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-            <PriorityChip priority={ticket.priority} />
+            <PriorityControl ticket={ticket} />
           </div>
           <div className="text-sm font-medium text-foreground">{ticket.title}</div>
-          <p className="line-clamp-3 text-xs text-foreground-muted">{goal ?? 'No goal yet.'}</p>
+          {ticket.goal?.trim() ? (
+            <ExpandableText text={ticket.goal.trim()} className="text-xs text-foreground-muted" />
+          ) : (
+            <p className="text-xs text-foreground-passive">No goal yet.</p>
+          )}
           <div className="flex justify-end gap-2">
             <Button
               type="button"
