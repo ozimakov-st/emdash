@@ -69,6 +69,10 @@ describe('parseTicket', () => {
     expect(result.ticket.openQuestions).toEqual({
       count: 2,
       first: '2026-11-02 (from child lima) Should the sync be hourly or on every login?',
+      items: [
+        '2026-11-02 (from child lima) Should the sync be hourly or on every login?',
+        '2026-11-03 Who owns the rollout?',
+      ],
     });
     expect(result.ticket.searchText).toContain('created child lima');
   });

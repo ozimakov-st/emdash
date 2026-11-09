@@ -17,6 +17,7 @@ import {
   reorderGroup,
   ticketColumn,
   ticketMatchesQuery,
+  ticketForTask,
   ticketSessionName,
   ticketSlug,
   type TicketSummary,
@@ -302,5 +303,19 @@ describe('goalFirstLine', () => {
     expect(goalFirstLine('\n  Sync SCIM groups.  \nMore text')).toBe('Sync SCIM groups.');
     expect(goalFirstLine('  \n ')).toBeNull();
     expect(goalFirstLine(null)).toBeNull();
+  });
+});
+
+describe('ticketForTask', () => {
+  const tickets = [ticket({ id: '1', pmSession: 'pm-1' }), ticket({ id: '2', pmSession: null })];
+  it('finds the ticket of a PM session first, then of a child task marker', () => {
+    expect(ticketForTask('pm-1', tickets, null)).toMatchObject({ role: 'pm', ticket: { id: '1' } });
+    expect(ticketForTask('pm-1', tickets, '2')).toMatchObject({ role: 'pm', ticket: { id: '1' } });
+    expect(ticketForTask('child', tickets, '2')).toMatchObject({
+      role: 'child',
+      ticket: { id: '2' },
+    });
+    expect(ticketForTask('child', tickets, '9')).toBeNull();
+    expect(ticketForTask('other', tickets, null)).toBeNull();
   });
 });

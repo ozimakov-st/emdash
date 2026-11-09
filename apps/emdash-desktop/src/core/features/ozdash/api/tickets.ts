@@ -49,7 +49,8 @@ export type TicketSummary = {
   nextStep: string | null;
   /** Open Dependencies rows. */
   waitingOn: Array<{ what: string; owner: string }>;
-  openQuestions: { count: number; first: string | null };
+  /** Open `## Questions for Oleg` items; `items` lists them all (set by the parser). */
+  openQuestions: { count: number; first: string | null; items?: string[] };
   /** The whole file, lowercased, for the search box. */
   searchText: string;
   /**
@@ -355,4 +356,20 @@ export function linkableTickets(
         Number(a.id) - Number(b.id) ||
         a.id.localeCompare(b.id)
     );
+}
+
+/**
+ * The ticket a task belongs to: as its PM session (`pm_session`), else as a child task
+ * (the task's ticket marker, by ticket id). Null when neither.
+ */
+export function ticketForTask(
+  taskId: string,
+  tickets: readonly TicketSummary[],
+  markerTicketId: string | null
+): { ticket: TicketSummary; role: 'pm' | 'child' } | null {
+  const pm = tickets.find((ticket) => ticket.pmSession === taskId);
+  if (pm) return { ticket: pm, role: 'pm' };
+  if (!markerTicketId) return null;
+  const child = tickets.find((ticket) => ticket.id === markerTicketId);
+  return child ? { ticket: child, role: 'child' } : null;
 }

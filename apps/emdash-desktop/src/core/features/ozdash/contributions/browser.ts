@@ -2,3 +2,4 @@
 export { TicketsBoard } from '../browser/tickets-board';
 export { NewTicketForm } from '../browser/new-ticket-form';
 export { OzdashNoTicketChip } from '../browser/no-ticket-chip';
+export { OzdashTicketPanel } from '../browser/ticket-panel';

@@ -65,3 +65,28 @@ export function toggleTicketPanel(
     ? { ...state, parkedOpen: !state.parkedOpen }
     : { ...state, archiveOpen: !state.archiveOpen };
 }
+
+const ozdashTicketPanelV1Schema = z.object({
+  version: z.literal('1'),
+  /** True when the ticket panel in task views shows only its one-line header. */
+  collapsed: z.boolean(),
+});
+
+export const ozdashTicketPanelSchema = defineVersionedSchema()
+  .initial('1', ozdashTicketPanelV1Schema)
+  .build();
+
+export type OzdashTicketPanelState = typeof ozdashTicketPanelSchema.Type;
+
+/** The ticket panel in task views: one open/closed state for all tasks. */
+export const ozdashTicketPanelMemento = defineMemento({
+  id: 'ozdash.ticket-panel',
+  subject: appSubject,
+  schema: ozdashTicketPanelSchema,
+  default: { version: '1' as const, collapsed: false },
+  retention: { tier: 'persisted', maxAge: days(3650) },
+});
+
+export function toggleTicketPanelCollapsed(state: OzdashTicketPanelState): OzdashTicketPanelState {
+  return { ...state, collapsed: !state.collapsed };
+}

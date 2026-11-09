@@ -3,9 +3,12 @@ import {
   isTicketPanelOpen,
   ozdashSidebarMemento,
   ozdashSidebarSchema,
+  ozdashTicketPanelMemento,
+  ozdashTicketPanelSchema,
   ozdashTicketsBoardMemento,
   ozdashTicketsBoardSchema,
   toggleNavOpen,
+  toggleTicketPanelCollapsed,
   toggleTicketPanel,
 } from './mementos';
 
@@ -46,6 +49,18 @@ describe('ozdashTicketsBoardMemento', () => {
     expect(state).toEqual({ version: '1', parkedOpen: false, archiveOpen: true });
     expect(ozdashTicketsBoardSchema.parseJson(ozdashTicketsBoardSchema.serialize(state))).toEqual(
       state
+    );
+  });
+});
+
+describe('ozdashTicketPanelMemento', () => {
+  it('starts open, is persisted, toggles and reads back', () => {
+    expect(ozdashTicketPanelMemento.default.collapsed).toBe(false);
+    expect(ozdashTicketPanelMemento.retention.tier).toBe('persisted');
+    const collapsed = toggleTicketPanelCollapsed(ozdashTicketPanelMemento.default);
+    expect(collapsed.collapsed).toBe(true);
+    expect(ozdashTicketPanelSchema.parseJson(ozdashTicketPanelSchema.serialize(collapsed))).toEqual(
+      { version: '1', collapsed: true }
     );
   });
 });

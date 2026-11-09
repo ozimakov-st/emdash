@@ -102,9 +102,15 @@ function firstUncheckedPlanLine(lines: readonly string[]): string | null {
   return null;
 }
 
-function openQuestions(lines: readonly string[]): { count: number; first: string | null } {
-  const open = lines.map((line) => UNCHECKED.exec(line)?.[1]).filter((text) => text);
-  return { count: open.length, first: open[0] ?? null };
+function openQuestions(lines: readonly string[]): {
+  count: number;
+  first: string | null;
+  items: string[];
+} {
+  const open = lines
+    .map((line) => UNCHECKED.exec(line)?.[1])
+    .filter((text): text is string => !!text);
+  return { count: open.length, first: open[0] ?? null, items: open };
 }
 
 function tableCells(line: string): string[] | null {
