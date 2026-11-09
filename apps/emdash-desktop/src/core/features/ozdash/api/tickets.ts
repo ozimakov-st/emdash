@@ -32,8 +32,10 @@ export type TicketSummary = {
   id: string;
   title: string;
   status: TicketStatus;
-  /** 1 = highest; null when missing or not a number. */
+  /** 1 = highest; null when missing or not a number (shown and sorted as P3). */
   priority: number | null;
+  /** Manual order within the same priority (lower = higher on the board); null when missing. */
+  rank: number | null;
   needsOleg: boolean;
   nextCheck: string | null;
   /** The OZdash task id of the ticket's PM session. */
@@ -50,6 +52,11 @@ export type TicketSummary = {
   openQuestions: { count: number; first: string | null };
   /** The whole file, lowercased, for the search box. */
   searchText: string;
+  /**
+   * The ticket's `icon.svg` (a validated 16x16 pixel-art SVG), or null when there is
+   * none or it is not valid. Set by the main process when it lists the vault.
+   */
+  icon?: string | null;
 };
 
 export type TicketList = {
@@ -109,6 +116,9 @@ export const OZDASH_TICKETS_CHANNELS = {
   linkTask: 'ozdash:link-ticket-task',
   createTicket: 'ozdash:create-ticket',
   linkPmSession: 'ozdash:link-pm-session',
+  setPriority: 'ozdash:set-ticket-priority',
+  reorder: 'ozdash:reorder-tickets',
+  park: 'ozdash:park-ticket',
   changed: 'ozdash:tickets-changed',
 } as const;
 
@@ -124,6 +134,12 @@ export type OzdashTicketsBridge = {
   linkTicketTask(input: LinkTicketTaskInput): Promise<LinkTicketTaskResult>;
   createTicket(input: CreateTicketInput): Promise<CreateTicketResult>;
   linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
+  /** Writes `priority:` (1-4) with a Log line. */
+  setTicketPriority(folder: string, priority: number): Promise<TicketActionResult>;
+  /** Rewrites `rank:` (10, 20, 30…) of one priority group, in this order. */
+  reorderTickets(folders: string[]): Promise<TicketActionResult>;
+  /** A ticket that is not parked or archived -> parked. */
+  parkTicket(folder: string): Promise<TicketActionResult>;
 };
 
 export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'parked' | 'archive';
@@ -201,17 +217,83 @@ export function ticketMatchesQuery(
   return words.every((word) => haystack.includes(word));
 }
 
-function compareTickets(a: TicketSummary, b: TicketSummary): number {
-  const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
-  const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
+export const MIN_PRIORITY = 1;
+export const MAX_PRIORITY = 4;
+/** The priority of a ticket without one. */
+export const DEFAULT_PRIORITY = 3;
+
+/** The priority the board shows and sorts by: 1-4; missing = 3; out of range = clamped. */
+export function effectivePriority(priority: number | null): number {
+  if (priority === null || !Number.isFinite(priority)) return DEFAULT_PRIORITY;
+  return Math.min(MAX_PRIORITY, Math.max(MIN_PRIORITY, Math.round(priority)));
+}
+
+/**
+ * The priority after one ▲ (`up`, higher priority = smaller number) or ▼ (`down`).
+ * Null at the ends (P1 cannot go up, P4 cannot go down).
+ */
+export function bumpPriority(priority: number | null, direction: 'up' | 'down'): number | null {
+  const current = effectivePriority(priority);
+  const next = direction === 'up' ? current - 1 : current + 1;
+  return next < MIN_PRIORITY || next > MAX_PRIORITY ? null : next;
+}
+
+/**
+ * Board order: priority (1 first; missing = 3), then rank (missing after ranked ones),
+ * then most recently updated, then id.
+ */
+export function compareTickets(
+  a: Pick<TicketSummary, 'id' | 'priority' | 'rank' | 'updated'>,
+  b: Pick<TicketSummary, 'id' | 'priority' | 'rank' | 'updated'>
+): number {
+  const pa = effectivePriority(a.priority);
+  const pb = effectivePriority(b.priority);
   if (pa !== pb) return pa - pb;
+  const ra = a.rank ?? Number.MAX_SAFE_INTEGER;
+  const rb = b.rank ?? Number.MAX_SAFE_INTEGER;
+  if (ra !== rb) return ra - rb;
   const ua = a.updated ?? '';
   const ub = b.updated ?? '';
   if (ua !== ub) return ua < ub ? 1 : -1;
   return Number(a.id) - Number(b.id) || a.id.localeCompare(b.id);
 }
 
-/** Tickets per column or panel, filtered by the query and sorted by priority, then newest. */
+/** The manual order of a priority group after a drag: ranks 10, 20, 30… in this order. */
+export function ranksForOrder(folders: readonly string[]): Map<string, number> {
+  return new Map(folders.map((folder, index) => [folder, (index + 1) * 10]));
+}
+
+/**
+ * Moves `folder` to the place of `overFolder` inside `group` (the folders of one
+ * priority group of a column, in board order). Null when either is not in the group
+ * (a drop into another priority group is not allowed) or nothing moves.
+ */
+export function reorderGroup(
+  group: readonly string[],
+  folder: string,
+  overFolder: string
+): string[] | null {
+  const from = group.indexOf(folder);
+  const to = group.indexOf(overFolder);
+  if (from < 0 || to < 0 || from === to) return null;
+  const next = [...group];
+  next.splice(from, 1);
+  next.splice(to, 0, folder);
+  return next;
+}
+
+/** True when the board offers Park: the ticket is not parked and not archived. */
+export function canPark(ticket: Pick<TicketSummary, 'status'>): boolean {
+  return ticket.status !== 'parked' && !isArchived(ticket);
+}
+
+/** The Goal as one paragraph (for a 3-line card preview); null when there is none. */
+export function goalPreview(goal: string | null): string | null {
+  const text = (goal ?? '').replace(/\s+/g, ' ').trim();
+  return text || null;
+}
+
+/** Tickets per column or panel, filtered by the query and sorted by `compareTickets`. */
 export function groupTickets(
   tickets: readonly TicketSummary[],
   query: string

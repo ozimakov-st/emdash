@@ -14,6 +14,7 @@ function ticket(overrides: Partial<TicketSummary> = {}): TicketSummary {
     title: 'Add SCIM sync',
     status: 'active',
     priority: 2,
+    rank: null,
     needsOleg: false,
     nextCheck: null,
     pmSession: 'pm-task',

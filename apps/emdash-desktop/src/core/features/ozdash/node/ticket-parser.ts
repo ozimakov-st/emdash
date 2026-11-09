@@ -158,6 +158,8 @@ export function parseTicket(content: string, folder: string): ParseTicketResult 
 
   const priorityText = fields.get('priority') ?? '';
   const priority = /^\d+$/.test(priorityText) ? Number(priorityText) : null;
+  const rankText = fields.get('rank') ?? '';
+  const rank = /^-?\d+$/.test(rankText) ? Number(rankText) : null;
   const sections = parseSections(lines.slice(block.end + 1));
 
   return {
@@ -167,6 +169,7 @@ export function parseTicket(content: string, folder: string): ParseTicketResult 
       title: fields.get('title') || folder.replace(/^\d+-?/, '').replace(/-/g, ' ') || `#${id}`,
       status,
       priority,
+      rank,
       needsOleg: /^(yes|true)$/i.test(fields.get('needs_oleg') ?? ''),
       nextCheck: fields.get('next_check') || null,
       pmSession: fields.get('pm_session') || null,

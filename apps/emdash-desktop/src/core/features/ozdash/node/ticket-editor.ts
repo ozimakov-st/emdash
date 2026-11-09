@@ -9,6 +9,7 @@ const KEY_ORDER = [
   'title',
   'status',
   'priority',
+  'rank',
   'needs_oleg',
   'next_check',
   'pm_session',
@@ -151,6 +152,39 @@ function setStatusContent(content: string, status: TicketStatus, log: string, no
     (text) => setFrontmatterValue(text, 'updated', formatDate(now)),
     (text) => appendLogLine(text, `- ${formatDateTime(now)}: ${log}`),
   ]);
+}
+
+/** Park a ticket: `status: parked`, today's `updated:`, and a Log line. */
+export function parkTicketContent(content: string, now: Date): EditResult {
+  return setStatusContent(content, 'parked', 'Parked in OZdash', now);
+}
+
+/**
+ * New priority: `priority:`, today's `updated:`, and a Log line. A `rank:` is cleared,
+ * because ranks order one priority group: the ticket joins the new group after the
+ * ones ordered by hand.
+ */
+export function setPriorityContent(
+  content: string,
+  priority: number,
+  hadRank: boolean,
+  now: Date
+): EditResult {
+  return chain(content, [
+    (text) => setFrontmatterValue(text, 'priority', String(priority)),
+    (text) => (hadRank ? setFrontmatterValue(text, 'rank', '') : { success: true, content: text }),
+    (text) => setFrontmatterValue(text, 'updated', formatDate(now)),
+    (text) =>
+      appendLogLine(text, `- ${formatDateTime(now)}: Priority set to P${priority} in OZdash`),
+  ]);
+}
+
+/**
+ * Manual order: `rank:` only (added after `priority:` when missing). No Log line and no
+ * `updated:` change: the order on the board is not news about the ticket.
+ */
+export function setRankContent(content: string, rank: number): EditResult {
+  return setFrontmatterValue(content, 'rank', String(rank));
 }
 
 /** Restore from the archive: `status: parked`, today's `updated:`, and a Log line. */

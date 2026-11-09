@@ -10,8 +10,12 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Logger } from '@emdash/shared/logger';
 import {
+  canPark,
+  effectivePriority,
   isArchived,
   isStartedStatus,
+  MAX_PRIORITY,
+  MIN_PRIORITY,
   ticketSessionName,
   type CreateTicketInput,
   type CreateTicketResult,
@@ -32,8 +36,11 @@ import {
   addChildTaskContent,
   archiveParkedTicketContent,
   chain,
+  parkTicketContent,
   restoreTicketContent,
   setPmSessionContent,
+  setPriorityContent,
+  setRankContent,
   startTicketContent,
   type ChildTaskLink,
   type EditResult,
@@ -139,6 +146,15 @@ export interface TicketsService {
    * the ticket, then syncs.
    */
   linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
+  /** Sets `priority:` (1-4) with a Log line, then syncs. */
+  setPriority(folder: string, priority: number): Promise<TicketActionResult>;
+  /**
+   * Manual order of one priority group: `rank:` 10, 20, 30… in this order. One write
+   * per ticket that changes, then one sync. Refuses tickets of different priorities.
+   */
+  reorder(folders: readonly string[]): Promise<TicketActionResult>;
+  /** A ticket that is not parked or archived -> parked, with a Log line, then syncs. */
+  park(folder: string): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
 }
@@ -394,10 +410,88 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     };
   }
 
+  async function reorder(folders: readonly string[]): Promise<TicketActionResult> {
+    if (folders.length === 0) return { success: true };
+    if (new Set(folders).size !== folders.length)
+      return { success: false, error: 'A ticket is listed twice' };
+    const repo = await resolveVaultRepo(vaultPath, run);
+    if (repo.success) {
+      const pulled = await pullVault(repo.repo, run);
+      if (!pulled.success)
+        logger.warn('ozdash tickets: pull before reorder failed', { error: pulled.error });
+    }
+    // Read all first: nothing is written when one ticket is missing or in another group.
+    const found: Array<{ folder: string; ticket: TicketSummary; content: string }> = [];
+    for (const folder of folders) {
+      const current = await readTicket(folder);
+      if (!current.success) return current;
+      found.push({ folder, ticket: current.ticket, content: current.content });
+    }
+    const priority = effectivePriority(found[0]!.ticket.priority);
+    if (found.some(({ ticket }) => effectivePriority(ticket.priority) !== priority))
+      return { success: false, error: 'Tickets of different priorities cannot be reordered' };
+    let written = 0;
+    for (const [index, { folder, ticket, content }] of found.entries()) {
+      const rank = (index + 1) * 10;
+      if (ticket.rank === rank) continue;
+      const edited = setRankContent(content, rank);
+      if (!edited.success) return { success: false, error: `#${ticket.id}: ${edited.error}` };
+      try {
+        await writeFile(ticketFile(folder), edited.content, 'utf8');
+      } catch (error) {
+        return { success: false, error: `Could not write #${ticket.id}: ${String(error)}` };
+      }
+      written += 1;
+    }
+    if (written === 0) return { success: true };
+    if (!repo.success) return { success: true, warning: `Saved, but not synced. ${repo.error}` };
+    const synced = await syncVault(repo.repo, `tickets: reorder P${priority} (OZdash)`, run);
+    if (!synced.success) {
+      logger.warn('ozdash tickets: vault sync failed', { error: synced.error });
+      return { success: true, warning: `Saved, but the vault sync failed: ${synced.error}` };
+    }
+    return { success: true };
+  }
+
   return {
     vaultPath,
 
     list: () => readTickets(vaultPath),
+
+    setPriority(folder, priority) {
+      if (!Number.isInteger(priority) || priority < MIN_PRIORITY || priority > MAX_PRIORITY)
+        return Promise.resolve({
+          success: false,
+          error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}`,
+        });
+      return serialize(() =>
+        editAndSync(
+          folder,
+          (content, ticket) =>
+            ticket.priority === priority
+              ? { success: true, content }
+              : setPriorityContent(content, priority, ticket.rank !== null, now()),
+          (ticket) => `tickets: #${ticket.id} priority P${priority} (OZdash)`
+        )
+      );
+    },
+
+    reorder(folders) {
+      return serialize(() => reorder(folders));
+    },
+
+    park(folder) {
+      return serialize(() =>
+        editAndSync(
+          folder,
+          (content, ticket) =>
+            canPark(ticket)
+              ? parkTicketContent(content, now())
+              : { success: false, error: `Ticket #${ticket.id} is already ${ticket.status}` },
+          (ticket) => `tickets: park #${ticket.id} (OZdash)`
+        )
+      );
+    },
 
     restore(folder) {
       return serialize(() =>

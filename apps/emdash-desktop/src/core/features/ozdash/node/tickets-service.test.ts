@@ -564,4 +564,103 @@ describe('tickets service', () => {
       );
     });
   });
+
+  describe('priority, order and park', () => {
+    const syncCalls = [
+      'rev-parse --show-toplevel',
+      'pull --rebase --autostash',
+      'add -- vault',
+      'diff --cached --quiet -- vault',
+      'pull --rebase --autostash',
+      'push',
+    ];
+    /** A ticket with this priority (and rank, when given). */
+    const withPriority = (id: string, priority: number, rank?: number) =>
+      ticketText(id, 'active').replace(
+        'priority: 2\n',
+        `priority: ${priority}\n${rank === undefined ? '' : `rank: ${rank}\n`}`
+      );
+
+    it('writes the priority in place with a Log line, then syncs once', async () => {
+      write('20-a', ticketText('20', 'active'));
+      const service = makeService();
+      expect(await service.setPriority('20-a', 1)).toEqual({ success: true });
+      expect(read('20-a')).toBe(
+        ticketText('20', 'active')
+          .replace('priority: 2\n', 'priority: 1\n')
+          .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+          .concat('- 2026-11-06 09:05: Priority set to P1 in OZdash\n')
+      );
+      expect(gitCalls).toEqual(syncCalls);
+    });
+
+    it('refuses priorities outside 1-4 and does not write the same value', async () => {
+      write('21-a', ticketText('21', 'active'));
+      const service = makeService();
+      expect(await service.setPriority('21-a', 0)).toEqual({
+        success: false,
+        error: 'Priority must be 1-4',
+      });
+      expect(await service.setPriority('21-a', 5)).toMatchObject({ success: false });
+      expect(await service.setPriority('21-a', 2.5)).toMatchObject({ success: false });
+      expect(gitCalls).toEqual([]);
+      expect(await service.setPriority('21-a', 2)).toEqual({ success: true });
+      expect(read('21-a')).toBe(ticketText('21', 'active'));
+      expect(gitCalls).not.toContain('push');
+    });
+
+    it('rewrites the ranks of one priority group only, in one sync', async () => {
+      write('30-a', withPriority('30', 2, 10));
+      write('31-b', withPriority('31', 2));
+      write('32-c', withPriority('32', 2, 20));
+      write('33-other', withPriority('33', 1, 10));
+      const service = makeService();
+
+      expect(await service.reorder(['31-b', '30-a', '32-c'])).toEqual({ success: true });
+      expect(read('31-b')).toBe(withPriority('31', 2, 10));
+      expect(read('30-a')).toBe(withPriority('30', 2, 20));
+      expect(read('32-c')).toBe(withPriority('32', 2, 30));
+      expect(read('33-other')).toBe(withPriority('33', 1, 10));
+      expect(gitCalls).toEqual(syncCalls);
+      const list = await readTickets(vault);
+      expect(list.tickets.map((t) => [t.id, t.rank])).toEqual([
+        ['30', 20],
+        ['31', 10],
+        ['32', 30],
+        ['33', 10],
+      ]);
+    });
+
+    it('refuses an order that mixes priorities and writes nothing', async () => {
+      write('40-a', withPriority('40', 2));
+      write('41-b', withPriority('41', 1));
+      const service = makeService();
+      expect(await service.reorder(['40-a', '41-b'])).toEqual({
+        success: false,
+        error: 'Tickets of different priorities cannot be reordered',
+      });
+      expect(await service.reorder(['40-a', '40-a'])).toMatchObject({ success: false });
+      expect(await service.reorder(['40-a', '../x'])).toMatchObject({ success: false });
+      expect(read('40-a')).toBe(withPriority('40', 2));
+      expect(gitCalls).not.toContain('push');
+    });
+
+    it('parks a working ticket; refuses parked and archived ones', async () => {
+      write('50-w', ticketText('50', 'waiting'));
+      write('51-p', ticketText('51', 'parked'));
+      write('52-d', ticketText('52', 'done'));
+      const service = makeService();
+      expect(await service.park('50-w')).toEqual({ success: true });
+      expect(read('50-w')).toBe(
+        changed(ticketText('50', 'waiting'), 'waiting', 'parked', 'Parked in OZdash')
+      );
+      expect(gitCalls).toEqual(syncCalls);
+      expect(await service.park('51-p')).toEqual({
+        success: false,
+        error: 'Ticket #51 is already parked',
+      });
+      expect(await service.park('52-d')).toMatchObject({ success: false });
+      expect(read('52-d')).toBe(ticketText('52', 'done'));
+    });
+  });
 });

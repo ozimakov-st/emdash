@@ -151,8 +151,19 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       );
   };
 
-  const { list, restore, archive, openSession, linkTask, createTicket, linkPmSession, changed } =
-    OZDASH_TICKETS_CHANNELS;
+  const {
+    list,
+    restore,
+    archive,
+    openSession,
+    linkTask,
+    createTicket,
+    linkPmSession,
+    setPriority,
+    reorder,
+    park,
+    changed,
+  } = OZDASH_TICKETS_CHANNELS;
   ipcMain.handle(list, () => service.list());
   ipcMain.handle(restore, (_event, folder: unknown) =>
     typeof folder === 'string'
@@ -211,6 +222,23 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       ? service.linkPmSession(input)
       : { success: false, error: 'Invalid PM session link' }
   );
+  ipcMain.handle(setPriority, (_event, folder: unknown, priority: unknown) =>
+    typeof folder === 'string' && typeof priority === 'number'
+      ? service.setPriority(folder, priority)
+      : { success: false, error: 'Invalid ticket folder or priority' }
+  );
+  ipcMain.handle(reorder, (_event, folders: unknown) =>
+    Array.isArray(folders) &&
+    folders.length <= 500 &&
+    folders.every((folder) => typeof folder === 'string')
+      ? service.reorder(folders as string[])
+      : { success: false, error: 'Invalid ticket order' }
+  );
+  ipcMain.handle(park, (_event, folder: unknown) =>
+    typeof folder === 'string'
+      ? service.park(folder)
+      : { success: false, error: 'Invalid ticket folder' }
+  );
   const stopWatching = service.watch((next) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(changed, next);
@@ -228,5 +256,8 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     ipcMain.removeHandler(linkTask);
     ipcMain.removeHandler(createTicket);
     ipcMain.removeHandler(linkPmSession);
+    ipcMain.removeHandler(setPriority);
+    ipcMain.removeHandler(reorder);
+    ipcMain.removeHandler(park);
   };
 }

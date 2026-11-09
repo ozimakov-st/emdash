@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bumpPriority,
+  canPark,
+  compareTickets,
+  effectivePriority,
   goalFirstLine,
+  goalPreview,
   groupTickets,
   isStartedStatus,
   linkableTickets,
   normalizeTicketStatus,
   panelView,
   pmTaskHasNoTicket,
+  ranksForOrder,
   relativeUpdated,
+  reorderGroup,
   ticketColumn,
   ticketMatchesQuery,
   ticketSessionName,
@@ -21,6 +28,7 @@ function ticket(overrides: Partial<TicketSummary>): TicketSummary {
     title: 'Ticket',
     status: 'active',
     priority: 3,
+    rank: null,
     needsOleg: false,
     nextCheck: null,
     pmSession: null,
@@ -78,7 +86,7 @@ describe('groupTickets', () => {
     const groups = groupTickets(tickets, '');
     expect(groups.active.map((t) => t.id)).toEqual(['2', '3', '1']);
     expect(groups['needs-oleg'].map((t) => t.id)).toEqual(['4']);
-    // Panels sort like columns: priority first (none last), then most recently updated.
+    // Panels sort like columns: priority first (none = P3), then most recently updated.
     expect(groups.parked.map((t) => t.id)).toEqual(['9', '8', '7']);
     expect(groups.waiting).toEqual([]);
     expect(groups.archive.map((t) => t.id)).toEqual(['10', '6', '5']);
@@ -86,6 +94,90 @@ describe('groupTickets', () => {
     const filtered = groupTickets(tickets, 'old');
     expect(filtered.archive.map((t) => t.id)).toEqual(['5']);
     expect(filtered.active).toEqual([]);
+  });
+});
+
+describe('priority', () => {
+  it('reads a missing priority as P3 and clamps out-of-range values', () => {
+    expect(effectivePriority(null)).toBe(3);
+    expect(effectivePriority(1)).toBe(1);
+    expect(effectivePriority(0)).toBe(1);
+    expect(effectivePriority(9)).toBe(4);
+  });
+
+  it('bumps up (smaller number) and down within P1-P4, null at the ends', () => {
+    expect(bumpPriority(3, 'up')).toBe(2);
+    expect(bumpPriority(2, 'up')).toBe(1);
+    expect(bumpPriority(1, 'up')).toBeNull();
+    expect(bumpPriority(3, 'down')).toBe(4);
+    expect(bumpPriority(4, 'down')).toBeNull();
+    expect(bumpPriority(null, 'up')).toBe(2);
+    expect(bumpPriority(null, 'down')).toBe(4);
+    expect(bumpPriority(7, 'down')).toBeNull();
+  });
+});
+
+describe('compareTickets', () => {
+  it('sorts by priority, then rank (missing last), then updated desc, then id', () => {
+    const tickets = [
+      ticket({ id: '1', priority: 2, rank: null, updated: '2026-11-09' }),
+      ticket({ id: '2', priority: 2, rank: 20, updated: '2026-01-01' }),
+      ticket({ id: '3', priority: 2, rank: 10, updated: '2026-01-01' }),
+      ticket({ id: '4', priority: 1, rank: 99, updated: '2026-01-01' }),
+      ticket({ id: '5', priority: null, rank: 10 }),
+      ticket({ id: '6', priority: 2, rank: null, updated: '2026-11-01' }),
+      ticket({ id: '7', priority: 3, rank: null }),
+      ticket({ id: '8', priority: 2, rank: null, updated: '2026-11-01' }),
+    ];
+    expect([...tickets].sort(compareTickets).map((t) => t.id)).toEqual([
+      '4',
+      '3',
+      '2',
+      '1',
+      '6',
+      '8',
+      '5',
+      '7',
+    ]);
+  });
+});
+
+describe('manual order', () => {
+  it('moves a ticket inside its priority group only', () => {
+    const group = ['a', 'b', 'c', 'd'];
+    expect(reorderGroup(group, 'd', 'b')).toEqual(['a', 'd', 'b', 'c']);
+    expect(reorderGroup(group, 'a', 'c')).toEqual(['b', 'c', 'a', 'd']);
+    expect(reorderGroup(group, 'a', 'a')).toBeNull();
+    // Another priority group: not allowed.
+    expect(reorderGroup(group, 'a', 'x')).toBeNull();
+    expect(reorderGroup(group, 'x', 'a')).toBeNull();
+  });
+
+  it('gives ranks 10, 20, 30… in order', () => {
+    expect([...ranksForOrder(['d', 'a', 'b'])]).toEqual([
+      ['d', 10],
+      ['a', 20],
+      ['b', 30],
+    ]);
+  });
+});
+
+describe('card helpers', () => {
+  it('offers Park only for tickets that are not parked or archived', () => {
+    expect(canPark({ status: 'active' })).toBe(true);
+    expect(canPark({ status: 'waiting' })).toBe(true);
+    expect(canPark({ status: 'blocked' })).toBe(true);
+    expect(canPark({ status: 'parked' })).toBe(false);
+    expect(canPark({ status: 'done' })).toBe(false);
+    expect(canPark({ status: 'dropped' })).toBe(false);
+  });
+
+  it('makes the Goal one paragraph', () => {
+    expect(goalPreview('Sync groups.\n\n- from SCIM\n  - to TS')).toBe(
+      'Sync groups. - from SCIM - to TS'
+    );
+    expect(goalPreview('  \n ')).toBeNull();
+    expect(goalPreview(null)).toBeNull();
   });
 });
 

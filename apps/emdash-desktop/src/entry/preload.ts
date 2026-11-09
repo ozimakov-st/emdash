@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld('ozdash', {
   linkTicketTask: (input: unknown) => ipcRenderer.invoke('ozdash:link-ticket-task', input),
   createTicket: (input: unknown) => ipcRenderer.invoke('ozdash:create-ticket', input),
   linkPmSession: (input: unknown) => ipcRenderer.invoke('ozdash:link-pm-session', input),
+  setTicketPriority: (folder: string, priority: number) =>
+    ipcRenderer.invoke('ozdash:set-ticket-priority', folder, priority),
+  reorderTickets: (folders: string[]) => ipcRenderer.invoke('ozdash:reorder-tickets', folders),
+  parkTicket: (folder: string) => ipcRenderer.invoke('ozdash:park-ticket', folder),
   // OZdash: Dock badge count (OZDASH_ATTENTION_COUNT_CHANNEL in ozdash/api/attention.ts).
   setAttentionCount: (count: number) => ipcRenderer.send('ozdash:attention-count', count),
 });

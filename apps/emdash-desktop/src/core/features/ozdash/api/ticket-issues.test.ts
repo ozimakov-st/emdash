@@ -19,6 +19,7 @@ function ticket(overrides: Partial<TicketSummary>): TicketSummary {
     title: 'Ticket',
     status: 'active',
     priority: 3,
+    rank: null,
     needsOleg: false,
     nextCheck: null,
     pmSession: null,

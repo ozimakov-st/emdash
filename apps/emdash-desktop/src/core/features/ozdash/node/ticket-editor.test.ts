@@ -4,9 +4,12 @@ import {
   addDependencyRow,
   appendLogLine,
   archiveParkedTicketContent,
+  parkTicketContent,
   restoreTicketContent,
   setFrontmatterValue,
   setPmSessionContent,
+  setPriorityContent,
+  setRankContent,
   startTicketContent,
 } from './ticket-editor';
 
@@ -171,6 +174,48 @@ describe('ticket edits', () => {
         '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: PM session task-9 started in OZdash\n'
       );
     expect(result.content).toBe(expected);
+  });
+});
+
+describe('priority, rank and park edits', () => {
+  it('sets the priority in place with updated and a Log line', () => {
+    const result = setPriorityContent(TICKET, 1, false, NOW);
+    if (!result.success) throw new Error(result.error);
+    expect(result.content).toBe(
+      TICKET.replace('priority: 3', 'priority: 1')
+        .replace('updated: 2026-10-20', 'updated: 2026-11-06')
+        .replace(
+          '- 2026-10-20 18:00: Done.\n',
+          '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: Priority set to P1 in OZdash\n'
+        )
+    );
+  });
+
+  it('clears the rank when the priority changes', () => {
+    const ranked = TICKET.replace('priority: 3\n', 'priority: 3\nrank: 20\n');
+    const result = setPriorityContent(ranked, 2, true, NOW);
+    if (!result.success) throw new Error(result.error);
+    expect(result.content).toContain('priority: 2\nrank:\nneeds_oleg: no');
+  });
+
+  it('adds rank right after priority, or changes it in place; nothing else changes', () => {
+    const added = setRankContent(TICKET, 10);
+    if (!added.success) throw new Error(added.error);
+    expect(added.content).toBe(TICKET.replace('priority: 3\n', 'priority: 3\nrank: 10\n'));
+    const changed = setRankContent(added.content, 30);
+    if (!changed.success) throw new Error(changed.error);
+    expect(changed.content).toBe(TICKET.replace('priority: 3\n', 'priority: 3\nrank: 30\n'));
+  });
+
+  it('parks a ticket with a Log line', () => {
+    const active = TICKET.replace('status: done ', 'status: active ');
+    const result = parkTicketContent(active, NOW);
+    if (!result.success) throw new Error(result.error);
+    expect(result.content).toContain('status: parked ');
+    expect(result.content).toContain('updated: 2026-11-06');
+    expect(result.content).toContain(
+      '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: Parked in OZdash\n\n## Notes'
+    );
   });
 });
 

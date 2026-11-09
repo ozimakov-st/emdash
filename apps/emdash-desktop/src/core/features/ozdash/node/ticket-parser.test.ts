@@ -48,6 +48,7 @@ describe('parseTicket', () => {
       title: 'Add SCIM group sync to token server',
       status: 'active',
       priority: 2,
+      rank: null,
       needsOleg: true,
       nextCheck: '2026-11-04',
       pmSession: '0f3c9a12-aaaa',
@@ -92,6 +93,7 @@ describe('parseTicket', () => {
       id: '7',
       status: 'parked',
       priority: null,
+      rank: null,
       needsOleg: false,
       nextCheck: null,
       pmSession: null,
@@ -100,6 +102,17 @@ describe('parseTicket', () => {
       waitingOn: [],
       openQuestions: { count: 0, first: null },
     });
+  });
+
+  it('reads rank as a number, else null', () => {
+    const text = (rank: string) => `---\nid: 7\nstatus: active\npriority: 2\nrank: ${rank}\n---\n`;
+    const rankOf = (rank: string) => {
+      const result = parseTicket(text(rank), '7-x');
+      return result.success ? result.ticket.rank : 'failed';
+    };
+    expect(rankOf('20')).toBe(20);
+    expect(rankOf('')).toBeNull();
+    expect(rankOf('soon')).toBeNull();
   });
 
   it('takes the id from the folder when the frontmatter has none', () => {
