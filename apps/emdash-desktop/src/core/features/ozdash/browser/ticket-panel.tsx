@@ -103,7 +103,7 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
           ) : (
             <ChevronDown className="size-3.5 shrink-0 text-foreground-passive" />
           )}
-          <TicketIcon ticket={ticket} size={collapsed ? 16 : 24} />
+          <TicketIcon ticket={ticket} size={collapsed ? 16 : 32} />
           <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
           <span className="min-w-0 truncate font-medium text-foreground" title={ticket.title}>
             {ticket.title}

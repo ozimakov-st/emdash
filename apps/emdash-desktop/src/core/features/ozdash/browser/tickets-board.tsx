@@ -586,7 +586,7 @@ function TicketCard({ ticket, vaultPath, busy, onOpen, onPark, drag }: TicketCar
       )}
     >
       <div className="flex items-center gap-1.5 text-xs">
-        <TicketIcon ticket={ticket} size={24} />
+        <TicketIcon ticket={ticket} size={32} />
         <span className="font-semibold text-foreground-info">#{ticket.id}</span>
         <PriorityControl ticket={ticket} />
         {ticket.status === 'blocked' && <Badge variant="outline">blocked</Badge>}
@@ -793,7 +793,7 @@ function ParkedRow({
           className="flex w-72 flex-col gap-2 p-3"
         >
           <div className="flex items-center gap-1.5 text-xs">
-            <TicketIcon ticket={ticket} size={24} />
+            <TicketIcon ticket={ticket} size={32} />
             <span className="font-semibold text-foreground-info">#{ticket.id}</span>
             <PriorityChip priority={ticket.priority} />
           </div>
