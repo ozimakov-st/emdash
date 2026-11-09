@@ -13,16 +13,23 @@ The sidebar shows the "PM" project first: the local project at `~/Projects/work`
 The PM project opens on a **Tickets** board (code in
 `apps/emdash-desktop/src/core/features/ozdash`). It reads
 `~/Projects/work/vault/tickets/*/ticket.md` (override with `OZDASH_VAULT_PATH`) and
-updates when the files change. Click a card to open the ticket's PM session (or start
-one with `/oz-pm <id>`); archived tickets have a Restore button. Both write the ticket
-and then sync the vault repo (add, commit, pull --rebase --autostash, push).
+updates when the files change. Columns: Needs Oleg, Active, Waiting. **Parked** and
+**Archive** are toggle panels on the right (open/closed is remembered; a search shows
+matching rows even in a closed panel). Click a card to open the ticket's PM session (or
+start one with `/oz-pm <id>`). A parked row has Start and Archive (-> dropped); an
+archived row has Restore (-> parked). Each write changes the ticket and then syncs the
+vault repo (add, commit, pull --rebase --autostash, push).
 "New task…" on an open card starts a task for the ticket in another project.
 
+Lifecycle: a ticket becomes `active` (Log `Started (<reason>)`) as soon as it gets a
+session: Start / card open, a linked PM session, or a child task (OZ Tickets, "New
+task…", MCP `create_task` with `ticket`). Waiting and blocked tickets stay as they are.
+A legacy `status: draft` reads as `parked`.
+
 In the PM project, "new task" (sidebar "+", ⌘N, the board, the task list) is
-**New ticket**: it writes `vault/tickets/<id>-<slug>/ticket.md` (draft), starts the
-PM session task `ticket-<id>-<slug>` with `/oz-pm <id>`, and syncs once. A PM task
-that no ticket points to shows "no ticket"; its header chip can link it to a ticket
-or create a ticket for it.
+**New ticket**: it writes `vault/tickets/<id>-<slug>/ticket.md` (parked, no PM session)
+and syncs once. A PM task that no ticket points to shows "no ticket"; its header chip
+can link it to a ticket or create a ticket for it (that ticket is active).
 
 - Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of

@@ -62,7 +62,7 @@ describe('newTicketContent', () => {
         '---',
         'id: 5',
         'title: "Fix \\"login\\": #1 bug"',
-        'status: draft',
+        'status: parked',
         'priority: 3',
         'needs_oleg: no',
         'next_check:',
@@ -105,7 +105,7 @@ describe('newTicketContent', () => {
     expect(parsed.ticket).toMatchObject({
       id: '5',
       title: 'Say "hi" #2 \\o/',
-      status: 'draft',
+      status: 'parked',
       priority: 3,
       needsOleg: false,
       nextCheck: null,
@@ -121,10 +121,24 @@ describe('newTicketContent', () => {
     expect(result).toEqual({
       success: true,
       content:
-        '---\nid: 5\ntitle: "Fix \\"login\\": #1 bug"\nstatus: draft\npriority: 3\n' +
+        '---\nid: 5\ntitle: "Fix \\"login\\": #1 bug"\nstatus: parked\npriority: 3\n' +
         'needs_oleg: no\nnext_check:\npm_session:\ncreated: 2026-11-06\nupdated: 2026-11-06\n' +
         'owner: oleg\n---\n\n## Goal\n\n## Log\n- 2026-11-06 09:05: Created in OZdash\n',
     });
+  });
+
+  it('writes an active ticket with a Started line when it starts with a session', () => {
+    const template = '---\nid:\ntitle:\nstatus: parked\n---\n\n## Log\n';
+    const result = newTicketContent(template, {
+      ...input,
+      description: '',
+      startedBy: 'PM session old-pm linked in OZdash',
+    });
+    if (!result.success) throw new Error(result.error);
+    expect(result.content).toContain('\nstatus: active\n');
+    expect(result.content).toMatch(
+      /## Log\n- 2026-11-06 09:05: Created in OZdash\n- 2026-11-06 09:05: Started \(PM session old-pm linked in OZdash\)\n$/
+    );
   });
 
   it('adds a Goal section when the template has none', () => {

@@ -4,7 +4,7 @@
 import type { LinkTicketTaskInput, LinkTicketTaskResult } from './ticket-issues';
 
 export const TICKET_STATUSES = [
-  'draft',
+  'parked',
   'active',
   'waiting',
   'blocked',
@@ -12,6 +12,21 @@ export const TICKET_STATUSES = [
   'dropped',
 ] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
+
+/** A status value from a file, lowercased; the old `draft` reads as `parked`. Null when unknown. */
+export function normalizeTicketStatus(value: string): TicketStatus | null {
+  const status = value.trim().toLowerCase();
+  if (status === 'draft') return 'parked';
+  return (TICKET_STATUSES as readonly string[]).includes(status) ? (status as TicketStatus) : null;
+}
+
+/**
+ * True when the ticket is being worked on (active, waiting or blocked). A ticket that
+ * gets a session is started (set to active) only when this is false.
+ */
+export function isStartedStatus(status: TicketStatus): boolean {
+  return status === 'active' || status === 'waiting' || status === 'blocked';
+}
 
 export type TicketSummary = {
   id: string;
@@ -89,6 +104,7 @@ export type LinkPmSessionInput = {
 export const OZDASH_TICKETS_CHANNELS = {
   list: 'ozdash:list-tickets',
   restore: 'ozdash:restore-ticket',
+  archive: 'ozdash:archive-ticket',
   openSession: 'ozdash:open-ticket-session',
   linkTask: 'ozdash:link-ticket-task',
   createTicket: 'ozdash:create-ticket',
@@ -101,6 +117,8 @@ export type OzdashTicketsBridge = {
   listTickets(): Promise<TicketList>;
   onTicketsChanged(callback: (list: TicketList) => void): () => void;
   restoreTicket(folder: string): Promise<TicketActionResult>;
+  /** Parked ticket -> dropped. */
+  archiveTicket(folder: string): Promise<TicketActionResult>;
   openTicketSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
   /** After a task was created from a ticket (see ticket-issues.ts). */
   linkTicketTask(input: LinkTicketTaskInput): Promise<LinkTicketTaskResult>;
@@ -108,15 +126,58 @@ export type OzdashTicketsBridge = {
   linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
 };
 
-export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'draft' | 'archive';
+export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'parked' | 'archive';
 
+/** The board's three working columns. Parked and Archive are side panels. */
 export const TICKET_COLUMNS: ReadonlyArray<{ id: TicketColumnId; label: string }> = [
   { id: 'needs-oleg', label: 'Needs Oleg' },
   { id: 'active', label: 'Active' },
   { id: 'waiting', label: 'Waiting' },
-  { id: 'draft', label: 'Draft' },
+];
+
+export type TicketPanelId = 'parked' | 'archive';
+
+export const TICKET_PANELS: ReadonlyArray<{ id: TicketPanelId; label: string }> = [
+  { id: 'parked', label: 'Parked' },
   { id: 'archive', label: 'Archive' },
 ];
+
+/**
+ * Whether a side panel shows. A closed panel still shows while a search is active and
+ * it has matches (`autoExpanded`, so the board can say "matches").
+ */
+export function panelView(input: { open: boolean; query: string; matches: number }): {
+  show: boolean;
+  autoExpanded: boolean;
+} {
+  if (input.open) return { show: true, autoExpanded: false };
+  const searching = input.query.trim().length > 0;
+  const autoExpanded = searching && input.matches > 0;
+  return { show: autoExpanded, autoExpanded };
+}
+
+/**
+ * How long ago `updated` (YYYY-MM-DD) was, short: `today`, `1d`, `5d`, `3w`, `2mo`, `1y`.
+ * Empty when missing or not a date.
+ */
+export function relativeUpdated(updated: string | null, now: Date): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(updated ?? '');
+  if (!match) return '';
+  const then = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((today.getTime() - then.getTime()) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days < 14) return `${days}d`;
+  if (days < 60) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+/** The first non-blank line of the Goal, for the Start popover; null when there is none. */
+export function goalFirstLine(goal: string | null): string | null {
+  const line = (goal ?? '').split(/\r?\n/).find((text) => text.trim() !== '');
+  return line ? line.trim() : null;
+}
 
 export function isArchived(ticket: Pick<TicketSummary, 'status'>): boolean {
   return ticket.status === 'done' || ticket.status === 'dropped';
@@ -150,7 +211,7 @@ function compareTickets(a: TicketSummary, b: TicketSummary): number {
   return Number(a.id) - Number(b.id) || a.id.localeCompare(b.id);
 }
 
-/** Tickets per column, filtered by the query and sorted by priority, then newest. */
+/** Tickets per column or panel, filtered by the query and sorted by priority, then newest. */
 export function groupTickets(
   tickets: readonly TicketSummary[],
   query: string
@@ -159,15 +220,13 @@ export function groupTickets(
     'needs-oleg': [],
     active: [],
     waiting: [],
-    draft: [],
+    parked: [],
     archive: [],
   };
   for (const ticket of tickets) {
     if (ticketMatchesQuery(ticket, query)) groups[ticketColumn(ticket)].push(ticket);
   }
   for (const list of Object.values(groups)) list.sort(compareTickets);
-  // Newest first reads better for the archive.
-  groups.archive.sort((a, b) => (b.updated ?? '').localeCompare(a.updated ?? ''));
   return groups;
 }
 

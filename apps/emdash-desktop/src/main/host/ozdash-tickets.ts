@@ -1,12 +1,15 @@
 // Fork (ozimakov-st): IPC for the Tickets board (see core/features/ozdash). The
-// renderer invokes list/restore/open-session; the main process pushes the list to
-// every window when the vault changes.
+// renderer invokes list/restore/archive/open-session; the main process pushes the list
+// to every window when the vault changes.
 import { homedir } from 'node:os';
 import type { Logger } from '@emdash/shared/logger';
 import { and, eq, isNull } from 'drizzle-orm';
 import { BrowserWindow, ipcMain } from 'electron';
 import { createTaskFromPrompt } from '@core/features/mcp/node/server/create-task-from-prompt';
-import type { McpToolDependencies } from '@core/features/mcp/node/server/dependencies';
+import type {
+  McpTicketTaskCreated,
+  McpToolDependencies,
+} from '@core/features/mcp/node/server/dependencies';
 import { taskTicketStoreOf } from '@core/features/mcp/node/server/ozdash-task-ticket-store';
 import { sendTaskMessage } from '@core/features/mcp/node/server/task-conversation';
 import { createOzTicketsIssueProvider } from '@core/features/ozdash/api/node/oz-tickets-issue-provider';
@@ -41,6 +44,17 @@ function isLinkInput(value: unknown): value is LinkTicketTaskInput {
     typeof input.projectId === 'string' &&
     typeof input.prompt === 'string'
   );
+}
+
+/** Set while the tickets IPC is registered; see `ozdashTicketTaskCreated`. */
+let onTicketTaskCreated: ((event: McpTicketTaskCreated) => void) | null = null;
+
+/**
+ * MCP create_task made a task with a `ticket`: the ticket got a session, so a parked
+ * ticket becomes active. Fire and forget; problems are logged.
+ */
+export function ozdashTicketTaskCreated(event: McpTicketTaskCreated): void {
+  onTicketTaskCreated?.(event);
 }
 
 const MAX_TITLE = 200;
@@ -101,7 +115,15 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       const rows = await mcp.db
         .select({ id: tasks.id })
         .from(tasks)
-        .where(and(eq(tasks.id, taskId), eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            eq(tasks.projectId, projectId),
+            isNull(tasks.deletedAt),
+            // A PM session that closed itself archives its task: treat it as missing.
+            isNull(tasks.archivedAt)
+          )
+        )
         .limit(1);
       return rows.length > 0;
     },
@@ -110,12 +132,36 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
   const taskTickets = taskTicketStoreOf(mcp);
   const firstRow = <T>(rows: T[]): T | undefined => rows[0];
 
-  const { list, restore, openSession, linkTask, createTicket, linkPmSession, changed } =
+  onTicketTaskCreated = ({ taskName, ticket }) => {
+    void service
+      .startTicket(ticket.id, `child task ${taskName} created via MCP create_task`)
+      .then((result) => {
+        if (!result.success || result.warning) {
+          logger.warn('ozdash tickets: could not start the ticket of an MCP task', {
+            ticketId: ticket.id,
+            error: result.success ? result.warning : result.error,
+          });
+        }
+      })
+      .catch((error: unknown) =>
+        logger.warn('ozdash tickets: could not start the ticket of an MCP task', {
+          ticketId: ticket.id,
+          error: String(error),
+        })
+      );
+  };
+
+  const { list, restore, archive, openSession, linkTask, createTicket, linkPmSession, changed } =
     OZDASH_TICKETS_CHANNELS;
   ipcMain.handle(list, () => service.list());
   ipcMain.handle(restore, (_event, folder: unknown) =>
     typeof folder === 'string'
       ? service.restore(folder)
+      : { success: false, error: 'Invalid ticket folder' }
+  );
+  ipcMain.handle(archive, (_event, folder: unknown) =>
+    typeof folder === 'string'
+      ? service.archive(folder)
       : { success: false, error: 'Invalid ticket folder' }
   );
   ipcMain.handle(openSession, (_event, folder: unknown, projectId: unknown) =>
@@ -174,8 +220,10 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
 
   return () => {
     stopWatching();
+    onTicketTaskCreated = null;
     ipcMain.removeHandler(list);
     ipcMain.removeHandler(restore);
+    ipcMain.removeHandler(archive);
     ipcMain.removeHandler(openSession);
     ipcMain.removeHandler(linkTask);
     ipcMain.removeHandler(createTicket);

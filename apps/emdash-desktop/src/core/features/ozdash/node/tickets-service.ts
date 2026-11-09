@@ -1,12 +1,17 @@
 // Fork (ozimakov-st): the Tickets board's main-process side. Reads tickets from the
-// vault, watches it, restores archived tickets, and opens (or starts) a ticket's PM
+// vault, watches it, restores and archives tickets, and opens (or starts) a ticket's PM
 // session. Every write is followed by a vault sync (see vault-sync.ts).
+//
+// Lifecycle: new tickets are parked (no session). A ticket becomes active as soon as it
+// gets a session (PM session from the board, a linked PM session, a child task), unless
+// it is already active, waiting or blocked. Restore -> parked; Archive (parked) -> dropped.
 import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Logger } from '@emdash/shared/logger';
 import {
   isArchived,
+  isStartedStatus,
   ticketSessionName,
   type CreateTicketInput,
   type CreateTicketResult,
@@ -25,9 +30,11 @@ import {
 } from './ticket-creator';
 import {
   addChildTaskContent,
+  archiveParkedTicketContent,
+  chain,
   restoreTicketContent,
-  setFrontmatterValue,
   setPmSessionContent,
+  startTicketContent,
   type ChildTaskLink,
   type EditResult,
 } from './ticket-editor';
@@ -35,6 +42,8 @@ import { parseTicket } from './ticket-parser';
 import { pullVault, resolveVaultRepo, runGit, syncVault, type GitRunner } from './vault-sync';
 
 const DEFAULT_VAULT = 'Projects/work/vault';
+/** The `Started (<reason>)` Log line when the board opens or starts a PM session. */
+const BOARD_START_REASON = 'PM session opened from the OZdash board';
 const WATCH_DEBOUNCE_MS = 400;
 const POLL_MS = 5_000;
 
@@ -90,7 +99,10 @@ export type TicketsServiceOptions = {
   logger: Logger;
   /** Creates a task in the PM project (the MCP create_task path). */
   createPmSession: CreatePmSession;
-  /** True when the task exists (not deleted) in the project. */
+  /**
+   * True when the task is live in the project: it exists, is not deleted and is not
+   * archived. A `pm_session` that is not live counts as missing (Start creates a new one).
+   */
   pmSessionExists(taskId: string, projectId: string): Promise<boolean>;
   run?: GitRunner;
   now?: () => Date;
@@ -99,18 +111,33 @@ export type TicketsServiceOptions = {
 export interface TicketsService {
   readonly vaultPath: string;
   list(): Promise<TicketList>;
+  /** Archived ticket -> parked. */
   restore(folder: string): Promise<TicketActionResult>;
+  /** Parked ticket -> dropped. */
+  archive(folder: string): Promise<TicketActionResult>;
+  /** Opens the PM session (creates it when missing) and starts a parked ticket. */
   openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
   /** The ticket with this id, or null. */
   findTicket(ticketId: string): Promise<TicketSummary | null>;
-  /** Adds a `child` Dependencies row and a Log line for a task created from the ticket. */
+  /**
+   * Adds a `child` Dependencies row and a Log line for a task created from the ticket,
+   * and starts the ticket when it is not active, waiting or blocked.
+   */
   linkChildTask(folder: string, link: ChildTaskLink): Promise<TicketActionResult>;
   /**
-   * Writes a new ticket and starts its PM session (or uses `existingTask`), then
-   * syncs the vault once. The file stays when the task cannot be created.
+   * The ticket got a session elsewhere (MCP create_task with `ticket`): sets it active
+   * with the Log line `Started (<reason>)`, unless it is already active, waiting or blocked.
+   */
+  startTicket(ticketId: string, reason: string): Promise<TicketActionResult>;
+  /**
+   * Writes a new parked ticket (no PM session), or, with `existingTask`, an active ticket
+   * with that task as its PM session. Then syncs the vault once.
    */
   createTicket(input: CreateTicketInput): Promise<CreateTicketResult>;
-  /** Makes a PM project task the ticket's PM session (`pm_session` + Log line), then syncs. */
+  /**
+   * Makes a PM project task the ticket's PM session (`pm_session` + Log line) and starts
+   * the ticket, then syncs.
+   */
   linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
@@ -175,6 +202,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     if (!current.success) return current;
     const edited = edit(current.content, current.ticket);
     if (!edited.success) return edited;
+    if (edited.content === current.content) return { success: true }; // Nothing to write.
     try {
       await writeFile(ticketFile(folder), edited.content, 'utf8');
     } catch (error) {
@@ -203,7 +231,8 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
   async function writeNewTicket(
     title: string,
     description: string,
-    pmSession: string
+    pmSession: string,
+    startedBy: string | undefined
   ): Promise<{ success: true; id: string; folder: string } | { success: false; error: string }> {
     const repo = await resolveVaultRepo(vaultPath, run);
     if (repo.success) {
@@ -229,6 +258,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
         title,
         description,
         pmSession,
+        ...(startedBy && { startedBy }),
         now: now(),
       });
       if (!content.success)
@@ -241,57 +271,37 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     }
   }
 
+  async function findTicket(ticketId: string): Promise<TicketSummary | null> {
+    const list = await readTickets(vaultPath);
+    return list.tickets.find((ticket) => ticket.id === ticketId) ?? null;
+  }
+
   async function createTicket(input: CreateTicketInput): Promise<CreateTicketResult> {
     const title = cleanTitle(input.title);
     if (!title) return { success: false, error: 'The title is empty' };
     const { projectId, existingTask } = input;
     if (existingTask && !(await options.pmSessionExists(existingTask.id, projectId)))
       return { success: false, error: 'The task is not in the PM project' };
+    // A new ticket is parked and gets no PM session; "Create ticket from this task"
+    // links the existing task, so that ticket starts active.
     const written = await serialize(() =>
-      writeNewTicket(title, input.description, existingTask?.id ?? '')
+      writeNewTicket(
+        title,
+        input.description,
+        existingTask?.id ?? '',
+        existingTask && `PM session ${existingTask.name} linked in OZdash`
+      )
     );
     if (!written.success) return written;
     const { id, folder } = written;
-
-    const warnings: string[] = [];
-    let taskId = existingTask?.id ?? null;
-    if (!existingTask) {
-      const created = await options.createPmSession({
-        projectId,
-        name: ticketSessionName({ id, title }),
-        prompt: `/oz-pm ${id}`,
-      });
-      if (created.success) {
-        taskId = created.taskId;
-        if (created.warning) warnings.push(created.warning);
-      } else {
-        warnings.push(
-          `Ticket #${id} was saved as a draft with no PM session, because the task could not be created: ${created.error}`
-        );
-      }
-    }
-
-    const synced = await serialize(async () => {
-      if (taskId && !existingTask) {
-        try {
-          const content = await readFile(ticketFile(folder), 'utf8');
-          const edited = setFrontmatterValue(content, 'pm_session', taskId);
-          if (!edited.success) throw new Error(edited.error);
-          await writeFile(ticketFile(folder), edited.content, 'utf8');
-        } catch (error) {
-          warnings.push(`The PM session was not saved in the ticket: ${String(error)}`);
-        }
-      }
-      return syncNow(`tickets: new #${id} (OZdash)`);
-    });
-    if (synced) warnings.push(synced);
+    const warning = await serialize(() => syncNow(`tickets: new #${id} (OZdash)`));
     return {
       success: true,
       ticketId: id,
       folder,
       projectId,
-      taskId,
-      ...(warnings.length > 0 && { warning: warnings.join(' ') }),
+      taskId: existingTask?.id ?? null,
+      ...(warning && { warning }),
     };
   }
 
@@ -311,7 +321,17 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     return serialize(() =>
       editAndSync(
         folder,
-        (content) => linkPmSessionContent(content, taskId, taskName, now()),
+        (content, ticket) =>
+          chain(content, [
+            (text) => linkPmSessionContent(text, taskId, taskName, now()),
+            (text) =>
+              startTicketContent(
+                text,
+                ticket.status,
+                `PM session ${taskName} linked in OZdash`,
+                now()
+              ),
+          ]),
         (ticket) => `tickets: link PM session ${taskName} to #${ticket.id} (OZdash)`
       )
     );
@@ -322,7 +342,26 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     if (!found.success) return found;
     const { ticket } = found;
     if (ticket.pmSession && (await options.pmSessionExists(ticket.pmSession, projectId))) {
-      return { success: true, projectId, taskId: ticket.pmSession, created: false };
+      const opened = {
+        success: true as const,
+        projectId,
+        taskId: ticket.pmSession,
+        created: false,
+      };
+      if (isStartedStatus(ticket.status)) return opened;
+      // A parked ticket (for example parked by its PM session) is started again.
+      const started = await serialize(() =>
+        editAndSync(
+          folder,
+          (content, current) =>
+            startTicketContent(content, current.status, BOARD_START_REASON, now()),
+          (before) => `tickets: start #${before.id} (OZdash)`
+        )
+      );
+      const warning = started.success
+        ? started.warning
+        : `The ticket was not set to active: ${started.error}`;
+      return { ...opened, ...(warning && { warning }) };
     }
     const created = await options.createPmSession({
       projectId,
@@ -334,7 +373,11 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     const saved = await serialize(() =>
       editAndSync(
         folder,
-        (content) => setPmSessionContent(content, taskId, now()),
+        (content, current) =>
+          chain(content, [
+            (text) => setPmSessionContent(text, taskId, now()),
+            (text) => startTicketContent(text, current.status, BOARD_START_REASON, now()),
+          ]),
         (before) => `tickets: PM session for #${before.id} (OZdash)`
       )
     );
@@ -369,17 +412,51 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
       );
     },
 
-    async findTicket(ticketId) {
-      const list = await readTickets(vaultPath);
-      return list.tickets.find((ticket) => ticket.id === ticketId) ?? null;
+    archive(folder) {
+      return serialize(() =>
+        editAndSync(
+          folder,
+          (content, ticket) =>
+            ticket.status === 'parked'
+              ? archiveParkedTicketContent(content, now())
+              : { success: false, error: `Ticket #${ticket.id} is not parked` },
+          (ticket) => `tickets: archive #${ticket.id} from parked (OZdash)`
+        )
+      );
     },
+
+    findTicket,
 
     linkChildTask(folder, link) {
       return serialize(() =>
         editAndSync(
           folder,
-          (content) => addChildTaskContent(content, link, now()),
+          (content, ticket) =>
+            chain(content, [
+              (text) => addChildTaskContent(text, link, now()),
+              (text) =>
+                startTicketContent(
+                  text,
+                  ticket.status,
+                  `child task ${link.taskName} created in OZdash`,
+                  now()
+                ),
+            ]),
           (ticket) => `tickets: link OZdash task ${link.taskName} to #${ticket.id}`
+        )
+      );
+    },
+
+    async startTicket(ticketId, reason) {
+      const ticket = await findTicket(ticketId);
+      if (!ticket)
+        return { success: false, error: `Ticket #${ticketId} was not found in the vault` };
+      if (isStartedStatus(ticket.status)) return { success: true };
+      return serialize(() =>
+        editAndSync(
+          ticket.folder,
+          (content, current) => startTicketContent(content, current.status, reason, now()),
+          (before) => `tickets: start #${before.id} (OZdash)`
         )
       );
     },

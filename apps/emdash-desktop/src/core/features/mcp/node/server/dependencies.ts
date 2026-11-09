@@ -4,6 +4,7 @@ import type {
   ProviderSettingsKey,
   ProviderSettingsSnapshot,
 } from '@core/features/conversations/api/provider-settings';
+import type { TaskTicket } from '@core/features/mcp/api/ozdash-task-ticket';
 import type { ProjectAttachmentManager } from '@core/features/projects/api/node/project-attachment-manager';
 import type { TaskService } from '@core/features/tasks/api/node/task-service';
 import type { WorkspaceIdentityService } from '@core/features/workspaces/api/node/workspace-identity-service';
@@ -41,6 +42,16 @@ export type McpToolDependencies = Readonly<{
   startInitialConversation: StartInitialConversation;
   /** Fork (ozimakov-st): task ticket markers; defaults to the app db's kv table. */
   taskTickets?: TaskTicketStore;
+  /** Fork (ozimakov-st): create_task made a task with a `ticket` (starts a parked ticket). */
+  onTicketTaskCreated?: (event: McpTicketTaskCreated) => void;
+}>;
+
+/** Fork (ozimakov-st): see `onTicketTaskCreated`. */
+export type McpTicketTaskCreated = Readonly<{
+  projectId: string;
+  taskId: string;
+  taskName: string;
+  ticket: TaskTicket;
 }>;
 
 /** The projects wire controller's `inspectProjectPath` and `createProject`. */

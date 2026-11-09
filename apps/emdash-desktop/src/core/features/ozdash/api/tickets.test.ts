@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  goalFirstLine,
   groupTickets,
+  isStartedStatus,
   linkableTickets,
+  normalizeTicketStatus,
+  panelView,
   pmTaskHasNoTicket,
+  relativeUpdated,
   ticketColumn,
   ticketMatchesQuery,
   ticketSessionName,
@@ -36,7 +41,7 @@ describe('ticketColumn', () => {
     expect(ticketColumn({ status: 'waiting', needsOleg: true })).toBe('needs-oleg');
     expect(ticketColumn({ status: 'active', needsOleg: false })).toBe('active');
     expect(ticketColumn({ status: 'waiting', needsOleg: false })).toBe('waiting');
-    expect(ticketColumn({ status: 'draft', needsOleg: false })).toBe('draft');
+    expect(ticketColumn({ status: 'parked', needsOleg: false })).toBe('parked');
     expect(ticketColumn({ status: 'done', needsOleg: true })).toBe('archive');
     expect(ticketColumn({ status: 'dropped', needsOleg: false })).toBe('archive');
   });
@@ -57,7 +62,7 @@ describe('ticketMatchesQuery', () => {
 });
 
 describe('groupTickets', () => {
-  it('groups by column, sorts by priority then newest, and filters by the query', () => {
+  it('groups by column or panel, sorts by priority then newest, and filters by the query', () => {
     const tickets = [
       ticket({ id: '1', priority: 3, updated: '2026-11-01' }),
       ticket({ id: '2', priority: 1, updated: '2026-10-01' }),
@@ -65,14 +70,18 @@ describe('groupTickets', () => {
       ticket({ id: '4', status: 'blocked' }),
       ticket({ id: '5', status: 'done', updated: '2026-09-01', title: 'Old' }),
       ticket({ id: '6', status: 'dropped', updated: '2026-10-01' }),
-      ticket({ id: '7', status: 'draft', priority: null }),
+      ticket({ id: '7', status: 'parked', priority: null }),
+      ticket({ id: '8', status: 'parked', priority: 1, updated: '2026-10-01' }),
+      ticket({ id: '9', status: 'parked', priority: 1, updated: '2026-10-09' }),
+      ticket({ id: '10', status: 'done', priority: 1, updated: '2026-08-01' }),
     ];
     const groups = groupTickets(tickets, '');
     expect(groups.active.map((t) => t.id)).toEqual(['2', '3', '1']);
     expect(groups['needs-oleg'].map((t) => t.id)).toEqual(['4']);
-    expect(groups.draft.map((t) => t.id)).toEqual(['7']);
+    // Panels sort like columns: priority first (none last), then most recently updated.
+    expect(groups.parked.map((t) => t.id)).toEqual(['9', '8', '7']);
     expect(groups.waiting).toEqual([]);
-    expect(groups.archive.map((t) => t.id)).toEqual(['6', '5']);
+    expect(groups.archive.map((t) => t.id)).toEqual(['10', '6', '5']);
 
     const filtered = groupTickets(tickets, 'old');
     expect(filtered.archive.map((t) => t.id)).toEqual(['5']);
@@ -117,5 +126,89 @@ describe('linkableTickets', () => {
     ];
     const ids = linkableTickets(tickets, (taskId) => taskId === 'live').map((t) => t.id);
     expect(ids).toEqual(['9', '10', '2']);
+  });
+});
+
+describe('ticket statuses', () => {
+  it('reads a legacy draft as parked and refuses unknown values', () => {
+    expect(normalizeTicketStatus('draft')).toBe('parked');
+    expect(normalizeTicketStatus(' Parked ')).toBe('parked');
+    expect(normalizeTicketStatus('WAITING')).toBe('waiting');
+    expect(normalizeTicketStatus('later')).toBeNull();
+    expect(normalizeTicketStatus('')).toBeNull();
+  });
+
+  it('counts active, waiting and blocked as started', () => {
+    expect(
+      ['parked', 'active', 'waiting', 'blocked', 'done', 'dropped'].map((s) => [
+        s,
+        isStartedStatus(s as never),
+      ])
+    ).toEqual([
+      ['parked', false],
+      ['active', true],
+      ['waiting', true],
+      ['blocked', true],
+      ['done', false],
+      ['dropped', false],
+    ]);
+  });
+});
+
+describe('panelView', () => {
+  it('shows an open panel, with or without a search', () => {
+    expect(panelView({ open: true, query: '', matches: 0 })).toEqual({
+      show: true,
+      autoExpanded: false,
+    });
+    expect(panelView({ open: true, query: 'scim', matches: 0 })).toEqual({
+      show: true,
+      autoExpanded: false,
+    });
+  });
+
+  it('shows a closed panel only while a search matches tickets in it', () => {
+    expect(panelView({ open: false, query: '', matches: 5 })).toEqual({
+      show: false,
+      autoExpanded: false,
+    });
+    expect(panelView({ open: false, query: '   ', matches: 5 })).toEqual({
+      show: false,
+      autoExpanded: false,
+    });
+    expect(panelView({ open: false, query: 'scim', matches: 0 })).toEqual({
+      show: false,
+      autoExpanded: false,
+    });
+    expect(panelView({ open: false, query: 'scim', matches: 2 })).toEqual({
+      show: true,
+      autoExpanded: true,
+    });
+  });
+});
+
+describe('relativeUpdated', () => {
+  const now = new Date(2026, 10, 9, 15, 30);
+  it('says how long ago, short', () => {
+    expect(relativeUpdated('2026-11-09', now)).toBe('today');
+    expect(relativeUpdated('2026-11-10', now)).toBe('today');
+    expect(relativeUpdated('2026-11-08', now)).toBe('1d');
+    expect(relativeUpdated('2026-10-27', now)).toBe('13d');
+    expect(relativeUpdated('2026-10-26', now)).toBe('2w');
+    expect(relativeUpdated('2026-09-01', now)).toBe('2mo');
+    expect(relativeUpdated('2025-11-01', now)).toBe('1y');
+  });
+
+  it('is empty when there is no date', () => {
+    expect(relativeUpdated(null, now)).toBe('');
+    expect(relativeUpdated('soon', now)).toBe('');
+  });
+});
+
+describe('goalFirstLine', () => {
+  it('takes the first non-blank line', () => {
+    expect(goalFirstLine('\n  Sync SCIM groups.  \nMore text')).toBe('Sync SCIM groups.');
+    expect(goalFirstLine('  \n ')).toBeNull();
+    expect(goalFirstLine(null)).toBeNull();
   });
 });

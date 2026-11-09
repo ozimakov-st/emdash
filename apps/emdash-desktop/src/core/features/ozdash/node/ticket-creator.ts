@@ -16,7 +16,7 @@ export const DEFAULT_TICKET_TEMPLATE = [
   '---',
   'id:',
   'title:',
-  'status: draft',
+  'status: parked',
   'priority: 3',
   'needs_oleg: no',
   'next_check:',
@@ -98,6 +98,11 @@ export type NewTicketInput = {
   description: string;
   /** The PM session task id, or empty. */
   pmSession: string;
+  /**
+   * Set when the ticket starts with a session ("Create ticket from this task"): the
+   * ticket is `active` and the Log gets `Started (<startedBy>)`. Else it is `parked`.
+   */
+  startedBy?: string;
   now: Date;
 };
 
@@ -107,7 +112,7 @@ export function newTicketContent(template: string | null, input: NewTicketInput)
   const steps: Array<(text: string) => EditResult> = [
     (text) => setFrontmatterValue(text, 'id', String(input.id)),
     (text) => setFrontmatterValue(text, 'title', quoteYamlString(input.title)),
-    (text) => setFrontmatterValue(text, 'status', 'draft'),
+    (text) => setFrontmatterValue(text, 'status', input.startedBy ? 'active' : 'parked'),
     (text) => setFrontmatterValue(text, 'priority', '3'),
     (text) => setFrontmatterValue(text, 'needs_oleg', 'no'),
     (text) => setFrontmatterValue(text, 'next_check', ''),
@@ -117,6 +122,10 @@ export function newTicketContent(template: string | null, input: NewTicketInput)
     (text) => addSectionText(text, 'Goal', input.description.trim()),
     (text) => appendLogLine(text, `- ${formatDateTime(input.now)}: Created in OZdash`),
   ];
+  if (input.startedBy) {
+    const line = `- ${formatDateTime(input.now)}: Started (${input.startedBy})`;
+    steps.push((text) => appendLogLine(text, line));
+  }
   return chain(template?.trim() ? template : DEFAULT_TICKET_TEMPLATE, steps);
 }
 

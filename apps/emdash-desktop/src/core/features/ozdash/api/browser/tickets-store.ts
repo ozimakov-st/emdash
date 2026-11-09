@@ -86,6 +86,16 @@ class TicketsStore {
     }
   }
 
+  async archive(folder: string): Promise<TicketActionResult> {
+    const api = bridge();
+    if (!api?.archiveTicket) return { success: false, error: 'Not available outside OZdash' };
+    try {
+      return await api.archiveTicket(folder);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   async createTicket(input: CreateTicketInput): Promise<CreateTicketResult> {
     const api = bridge();
     if (!api?.createTicket) return { success: false, error: 'Not available outside OZdash' };

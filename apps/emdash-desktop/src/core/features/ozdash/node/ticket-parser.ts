@@ -1,6 +1,6 @@
 // Fork (ozimakov-st): parses a vault `ticket.md` (flat YAML frontmatter + markdown
 // sections) into what the Tickets board needs. Pure; no file access.
-import { TICKET_STATUSES, type TicketStatus, type TicketSummary } from '../api/tickets';
+import { normalizeTicketStatus, type TicketSummary } from '../api/tickets';
 
 export type ParseTicketResult =
   | { success: true; ticket: TicketSummary }
@@ -139,10 +139,6 @@ function openDependencies(lines: readonly string[]): Array<{ what: string; owner
   return rows;
 }
 
-function isTicketStatus(value: string): value is TicketStatus {
-  return (TICKET_STATUSES as readonly string[]).includes(value);
-}
-
 /** Parses one ticket file. `folder` is its folder name, for example `123-add-scim`. */
 export function parseTicket(content: string, folder: string): ParseTicketResult {
   const lines = splitLines(content);
@@ -154,8 +150,9 @@ export function parseTicket(content: string, folder: string): ParseTicketResult 
   if (!id) return { success: false, error: 'no id' };
   if (!/^[\w.-]{1,32}$/.test(id)) return { success: false, error: `invalid id "${id}"` };
 
-  const status = (fields.get('status') ?? '').toLowerCase();
-  if (!isTicketStatus(status)) {
+  // A legacy `draft` reads as `parked`.
+  const status = normalizeTicketStatus(fields.get('status') ?? '');
+  if (!status) {
     return { success: false, error: `unknown status "${fields.get('status') ?? ''}"` };
   }
 

@@ -472,6 +472,16 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
     },
     guarded(dependencies, 'create_task', async (input) => {
       const result = await createTaskFromPrompt(dependencies, input);
+      // Fork (ozimakov-st): a task for a ticket starts that ticket (if parked).
+      if (result.success && result.data.ticket) {
+        const { taskId, taskName, ticket } = result.data;
+        dependencies.onTicketTaskCreated?.({
+          projectId: input.projectId,
+          taskId,
+          taskName,
+          ticket,
+        });
+      }
       return result.success ? textResult(result.data) : errorResult(result.error);
     })
   );

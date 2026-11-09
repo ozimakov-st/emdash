@@ -3,9 +3,11 @@ import {
   addChildTaskContent,
   addDependencyRow,
   appendLogLine,
+  archiveParkedTicketContent,
   restoreTicketContent,
   setFrontmatterValue,
   setPmSessionContent,
+  startTicketContent,
 } from './ticket-editor';
 
 const NOW = new Date(2026, 10, 6, 9, 5); // 2026-11-06 09:05 local time
@@ -109,16 +111,54 @@ describe('appendLogLine', () => {
 });
 
 describe('ticket edits', () => {
-  it('restores: status, updated and one Log line; nothing else changes', () => {
+  it('restores to parked: status, updated and one Log line; nothing else changes', () => {
     const result = restoreTicketContent(TICKET, NOW);
     if (!result.success) throw new Error(result.error);
-    const expected = TICKET.replace('status: done  ', 'status: active  ')
+    const expected = TICKET.replace('status: done  ', 'status: parked  ')
       .replace('updated: 2026-10-20', 'updated: 2026-11-06')
       .replace(
         '- 2026-10-20 18:00: Done.\n',
-        '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: Restored from archive in OZdash\n'
+        '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: Restored to parked in OZdash\n'
       );
     expect(result.content).toBe(expected);
+  });
+
+  it('archives a parked ticket as dropped', () => {
+    const parked = TICKET.replace('status: done  ', 'status: parked  ');
+    const result = archiveParkedTicketContent(parked, NOW);
+    if (!result.success) throw new Error(result.error);
+    expect(result.content).toBe(
+      parked
+        .replace('status: parked  ', 'status: dropped  ')
+        .replace('updated: 2026-10-20', 'updated: 2026-11-06')
+        .replace(
+          '- 2026-10-20 18:00: Done.\n',
+          '- 2026-10-20 18:00: Done.\n- 2026-11-06 09:05: Archived from parked in OZdash\n'
+        )
+    );
+  });
+
+  it('starts a parked ticket with a reason in the Log', () => {
+    const parked = TICKET.replace('status: done  ', 'status: parked  ');
+    const result = startTicketContent(parked, 'parked', 'child task x created in OZdash', NOW);
+    if (!result.success) throw new Error(result.error);
+    expect(result.content).toBe(
+      parked
+        .replace('status: parked  ', 'status: active  ')
+        .replace('updated: 2026-10-20', 'updated: 2026-11-06')
+        .replace(
+          '- 2026-10-20 18:00: Done.\n',
+          '- 2026-10-20 18:00: Done.\n' +
+            '- 2026-11-06 09:05: Started (child task x created in OZdash)\n'
+        )
+    );
+  });
+
+  it('does not start an active, waiting or blocked ticket (no change at all)', () => {
+    for (const status of ['active', 'waiting', 'blocked'] as const) {
+      const text = TICKET.replace('status: done  ', `status: ${status}  `);
+      expect(startTicketContent(text, status, 'x', NOW)).toEqual({ success: true, content: text });
+    }
   });
 
   it('sets the PM session', () => {

@@ -1,5 +1,6 @@
 // Fork (ozimakov-st): in-place edits of a vault `ticket.md`. Only the touched
 // frontmatter lines and the new Log line change; every other byte stays as it was.
+import { isStartedStatus, type TicketStatus } from '../api/tickets';
 import { findFrontmatter, parseFrontmatterLine } from './ticket-parser';
 
 /** Frontmatter keys in the order the vault format lists them. */
@@ -143,13 +144,37 @@ export function chain(content: string, edits: Array<(content: string) => EditRes
   return { success: true, content: current };
 }
 
-/** Restore from the archive: `status: active`, today's `updated:`, and a Log line. */
-export function restoreTicketContent(content: string, now: Date): EditResult {
+/** Sets `status:`, today's `updated:`, and appends a Log line. */
+function setStatusContent(content: string, status: TicketStatus, log: string, now: Date) {
   return chain(content, [
-    (text) => setFrontmatterValue(text, 'status', 'active'),
+    (text) => setFrontmatterValue(text, 'status', status),
     (text) => setFrontmatterValue(text, 'updated', formatDate(now)),
-    (text) => appendLogLine(text, `- ${formatDateTime(now)}: Restored from archive in OZdash`),
+    (text) => appendLogLine(text, `- ${formatDateTime(now)}: ${log}`),
   ]);
+}
+
+/** Restore from the archive: `status: parked`, today's `updated:`, and a Log line. */
+export function restoreTicketContent(content: string, now: Date): EditResult {
+  return setStatusContent(content, 'parked', 'Restored to parked in OZdash', now);
+}
+
+/** Archive a parked ticket: `status: dropped`, today's `updated:`, and a Log line. */
+export function archiveParkedTicketContent(content: string, now: Date): EditResult {
+  return setStatusContent(content, 'dropped', 'Archived from parked in OZdash', now);
+}
+
+/**
+ * The ticket got a session: `status: active`, today's `updated:`, and the Log line
+ * `Started (<reason>)`. Unchanged when the status is already active, waiting or blocked.
+ */
+export function startTicketContent(
+  content: string,
+  status: TicketStatus,
+  reason: string,
+  now: Date
+): EditResult {
+  if (isStartedStatus(status)) return { success: true, content };
+  return setStatusContent(content, 'active', `Started (${reason})`, now);
 }
 
 /** Records the ticket's PM session: `pm_session:`, today's `updated:`, and a Log line. */

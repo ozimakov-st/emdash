@@ -84,12 +84,13 @@ describe('parseTicket', () => {
     expect(result.ticket.nextStep).toBe('Get ADR approval from Ann and Raj (people, via Slack)');
   });
 
-  it('uses defaults for empty fields and missing sections', () => {
+  it('uses defaults for empty fields and missing sections; a legacy draft is parked', () => {
     const minimal = `---\nid: 7\ntitle: Small\nstatus: draft\npriority:\nneeds_oleg: no\nnext_check:\npm_session:\n---\n`;
     const result = parseTicket(minimal, '7-small');
     if (!result.success) throw new Error(result.error);
     expect(result.ticket).toMatchObject({
       id: '7',
+      status: 'parked',
       priority: null,
       needsOleg: false,
       nextCheck: null,

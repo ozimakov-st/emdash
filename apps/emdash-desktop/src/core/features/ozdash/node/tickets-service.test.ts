@@ -38,6 +38,25 @@ describe('tickets service', () => {
     rmSync(join(vault, '..'), { recursive: true, force: true });
   });
 
+  /** A service with a fake git runner and a fixed clock; override the rest. */
+  function makeService(overrides: Partial<Parameters<typeof createTicketsService>[0]> = {}) {
+    return createTicketsService({
+      vaultPath: vault,
+      logger,
+      run,
+      now: () => NOW,
+      createPmSession: vi.fn(),
+      pmSessionExists: vi.fn(async () => false),
+      ...overrides,
+    });
+  }
+  /** `ticketText` after a status change on NOW, with these Log lines appended. */
+  const changed = (base: string, from: string, to: string, ...log: string[]) =>
+    base
+      .replace(`status: ${from}\n`, `status: ${to}\n`)
+      .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+      .concat(log.map((line) => `- 2026-11-06 09:05: ${line}\n`).join(''));
+
   it('resolves the vault path', () => {
     expect(resolveVaultPath(undefined, '/home/o')).toBe('/home/o/Projects/work/vault');
     expect(resolveVaultPath('~/v', '/home/o')).toBe('/home/o/v');
@@ -57,7 +76,7 @@ describe('tickets service', () => {
     expect((await readTickets(join(vault, 'missing'))).error).toMatch(/^No vault at /);
   });
 
-  it('restores an archived ticket and syncs the vault', async () => {
+  it('restores an archived ticket to parked and syncs the vault', async () => {
     write('5-old', ticketText('5', 'done'));
     const service = createTicketsService({
       vaultPath: vault,
@@ -70,9 +89,7 @@ describe('tickets service', () => {
 
     expect(await service.restore('5-old')).toEqual({ success: true });
     expect(read('5-old')).toBe(
-      ticketText('5', 'active')
-        .replace('updated: 2026-10-02', 'updated: 2026-11-06')
-        .concat('- 2026-11-06 09:05: Restored from archive in OZdash\n')
+      changed(ticketText('5', 'done'), 'done', 'parked', 'Restored to parked in OZdash')
     );
     expect(gitCalls).toEqual([
       'rev-parse --show-toplevel',
@@ -183,7 +200,7 @@ describe('tickets service', () => {
   });
 
   it('reports a failed task creation and leaves the ticket alone', async () => {
-    write('9-z', ticketText('9', 'draft'));
+    write('9-z', ticketText('9', 'parked'));
     const service = createTicketsService({
       vaultPath: vault,
       logger,
@@ -192,12 +209,12 @@ describe('tickets service', () => {
       pmSessionExists: async () => false,
     });
     expect(await service.openSession('9-z', 'pm')).toEqual({ success: false, error: 'no claude' });
-    expect(read('9-z')).toBe(ticketText('9', 'draft'));
+    expect(read('9-z')).toBe(ticketText('9', 'parked'));
   });
 
   describe('createTicket', () => {
     const template =
-      '---\nid:\ntitle:\nstatus: draft\npm_session:\ncreated:\nupdated:\n---\n\n## Goal\n\n## Log\n';
+      '---\nid:\ntitle:\nstatus: parked\npm_session:\ncreated:\nupdated:\n---\n\n## Goal\n\n## Log\n';
     const writeTemplate = () => {
       mkdirSync(join(vault, 'templates'), { recursive: true });
       writeFileSync(join(vault, 'templates', 'ticket.md'), template);
@@ -209,21 +226,14 @@ describe('tickets service', () => {
       'push',
     ];
 
-    it('writes the next ticket from the template, starts its PM session, and syncs once', async () => {
+    it('writes the next ticket from the template as parked, with no PM session, and syncs once', async () => {
       writeTemplate();
       write('3-old', ticketText('3', 'active'));
       // The highest id is in the frontmatter, not the folder name.
       write('4-renamed', ticketText('9', 'active'));
       mkdirSync(join(vault, 'tickets', '7-folder-only'));
-      const createPmSession = vi.fn(async () => ({ success: true as const, taskId: 'pm-10' }));
-      const service = createTicketsService({
-        vaultPath: vault,
-        logger,
-        run,
-        now: () => NOW,
-        createPmSession,
-        pmSessionExists: vi.fn(),
-      });
+      const createPmSession = vi.fn();
+      const service = makeService({ createPmSession });
 
       const result = await service.createTicket({
         title: 'Add SCIM sync',
@@ -236,16 +246,12 @@ describe('tickets service', () => {
         ticketId: '10',
         folder: '10-add-scim-sync',
         projectId: 'pm',
-        taskId: 'pm-10',
+        taskId: null,
       });
-      expect(createPmSession).toHaveBeenCalledWith({
-        projectId: 'pm',
-        name: 'ticket-10-add-scim-sync',
-        prompt: '/oz-pm 10',
-      });
+      expect(createPmSession).not.toHaveBeenCalled();
       expect(read('10-add-scim-sync')).toBe(
-        '---\nid: 10\ntitle: "Add SCIM sync"\nstatus: draft\npriority: 3\nneeds_oleg: no\n' +
-          'next_check:\npm_session: pm-10\ncreated: 2026-11-06\nupdated: 2026-11-06\n---\n\n' +
+        '---\nid: 10\ntitle: "Add SCIM sync"\nstatus: parked\npriority: 3\nneeds_oleg: no\n' +
+          'next_check:\npm_session:\ncreated: 2026-11-06\nupdated: 2026-11-06\n---\n\n' +
           '## Goal\nSync groups.\n\n## Log\n- 2026-11-06 09:05: Created in OZdash\n'
       );
       expect(gitCalls).toEqual([
@@ -256,39 +262,7 @@ describe('tickets service', () => {
       ]);
     });
 
-    it('keeps the draft without pm_session when the task cannot be created', async () => {
-      const service = createTicketsService({
-        vaultPath: vault,
-        logger,
-        run,
-        now: () => NOW,
-        createPmSession: async () => ({ success: false, error: 'no claude' }),
-        pmSessionExists: vi.fn(),
-      });
-
-      const result = await service.createTicket({
-        title: 'First',
-        description: '',
-        projectId: 'pm',
-      });
-
-      expect(result).toMatchObject({
-        success: true,
-        ticketId: '1',
-        folder: '1-first',
-        taskId: null,
-      });
-      expect(result.success && result.warning).toMatch(
-        /^Ticket #1 was saved as a draft with no PM session.*no claude$/
-      );
-      const content = read('1-first');
-      expect(content).toContain('status: draft\n');
-      expect(content).toContain('pm_session:\n');
-      expect(content).toContain('## Log\n- 2026-11-06 09:05: Created in OZdash\n');
-      expect(gitCalls.filter((call) => call === 'push')).toHaveLength(1);
-    });
-
-    it('uses an existing task as the PM session and creates no task', async () => {
+    it('uses an existing task as the PM session (active) and creates no task', async () => {
       const createPmSession = vi.fn();
       const service = createTicketsService({
         vaultPath: vault,
@@ -317,6 +291,11 @@ describe('tickets service', () => {
       expect(result).toMatchObject({ success: true, ticketId: '1', taskId: 'task-x' });
       expect(createPmSession).not.toHaveBeenCalled();
       expect(read('1-from-task')).toContain('pm_session: task-x\n');
+      expect(read('1-from-task')).toContain('status: active\n');
+      expect(read('1-from-task')).toContain(
+        '- 2026-11-06 09:05: Created in OZdash\n' +
+          '- 2026-11-06 09:05: Started (PM session old-pm linked in OZdash)\n'
+      );
     });
 
     it('gives two quick creates different ids, and refuses an empty title', async () => {
@@ -362,6 +341,21 @@ describe('tickets service', () => {
       expect(gitCalls).toContain('push');
     });
 
+    it('starts a parked ticket when it gets a PM session', async () => {
+      write('4-x', ticketText('4', 'parked'));
+      const service = makeService({ pmSessionExists: async (taskId) => taskId === 'task-new' });
+      expect(await service.linkPmSession(input)).toEqual({ success: true });
+      expect(read('4-x')).toBe(
+        changed(
+          ticketText('4', 'parked', 'task-new'),
+          'parked',
+          'active',
+          'PM session pm-new linked in OZdash',
+          'Started (PM session pm-new linked in OZdash)'
+        )
+      );
+    });
+
     it('refuses a ticket whose PM session is live, and a task outside the PM project', async () => {
       write('4-x', ticketText('4', 'active', 'live'));
       const service = createTicketsService({
@@ -381,6 +375,193 @@ describe('tickets service', () => {
       });
       expect(read('4-x')).toBe(ticketText('4', 'active', 'live'));
       expect(gitCalls).toEqual([]);
+    });
+  });
+
+  describe('lifecycle', () => {
+    const syncCalls = [
+      'rev-parse --show-toplevel',
+      'pull --rebase --autostash',
+      'add -- vault',
+      'diff --cached --quiet -- vault',
+      'pull --rebase --autostash',
+      'push',
+    ];
+    const BOARD = 'Started (PM session opened from the OZdash board)';
+
+    it('Start on a parked ticket with no PM session creates one and sets it active', async () => {
+      write('3-p', ticketText('3', 'parked'));
+      const createPmSession = vi.fn(async () => ({ success: true as const, taskId: 'pm-3' }));
+      const service = makeService({ createPmSession });
+      expect(await service.openSession('3-p', 'pm')).toEqual({
+        success: true,
+        projectId: 'pm',
+        taskId: 'pm-3',
+        created: true,
+      });
+      expect(createPmSession).toHaveBeenCalledWith({
+        projectId: 'pm',
+        name: 'ticket-3-ticket-3',
+        prompt: '/oz-pm 3',
+      });
+      expect(read('3-p')).toBe(
+        changed(
+          ticketText('3', 'parked', 'pm-3'),
+          'parked',
+          'active',
+          'PM session pm-3 started in OZdash',
+          BOARD
+        )
+      );
+      expect(gitCalls).toEqual(syncCalls);
+    });
+
+    it('treats a pm_session that points to an archived or deleted task as missing', async () => {
+      // The PM session closed itself: ticket parked, its task archived (not live).
+      write('4-p', ticketText('4', 'parked', 'archived-task'));
+      const createPmSession = vi.fn(async () => ({ success: true as const, taskId: 'pm-new' }));
+      const pmSessionExists = vi.fn(async () => false);
+      const service = makeService({ createPmSession, pmSessionExists });
+
+      expect(await service.openSession('4-p', 'pm')).toMatchObject({
+        success: true,
+        taskId: 'pm-new',
+        created: true,
+      });
+      expect(pmSessionExists).toHaveBeenCalledWith('archived-task', 'pm');
+      expect(createPmSession).toHaveBeenCalledWith({
+        projectId: 'pm',
+        name: 'ticket-4-ticket-4',
+        prompt: '/oz-pm 4',
+      });
+      expect(read('4-p')).toBe(
+        changed(
+          ticketText('4', 'parked', 'pm-new'),
+          'parked',
+          'active',
+          'PM session pm-new started in OZdash',
+          BOARD
+        )
+      );
+    });
+
+    it('opening a live PM session starts a parked ticket, but no other status', async () => {
+      write('5-p', ticketText('5', 'parked', 'live'));
+      write('6-w', ticketText('6', 'waiting', 'live'));
+      write('7-b', ticketText('7', 'blocked', 'live'));
+      const createPmSession = vi.fn();
+      const service = makeService({ createPmSession, pmSessionExists: async () => true });
+
+      expect(await service.openSession('6-w', 'pm')).toMatchObject({
+        taskId: 'live',
+        created: false,
+      });
+      expect(await service.openSession('7-b', 'pm')).toMatchObject({
+        taskId: 'live',
+        created: false,
+      });
+      expect(gitCalls).toEqual([]);
+      expect(read('6-w')).toBe(ticketText('6', 'waiting', 'live'));
+      expect(read('7-b')).toBe(ticketText('7', 'blocked', 'live'));
+
+      expect(await service.openSession('5-p', 'pm')).toEqual({
+        success: true,
+        projectId: 'pm',
+        taskId: 'live',
+        created: false,
+      });
+      expect(read('5-p')).toBe(
+        changed(ticketText('5', 'parked', 'live'), 'parked', 'active', BOARD)
+      );
+      expect(gitCalls).toEqual(syncCalls);
+      expect(createPmSession).not.toHaveBeenCalled();
+    });
+
+    it('a child task starts a parked ticket only; waiting and blocked stay', async () => {
+      write('8-p', ticketText('8', 'parked', 'pm-8'));
+      write('9-w', ticketText('9', 'waiting', 'pm-9'));
+      write('10-b', ticketText('10', 'blocked', 'pm-10'));
+      const service = makeService();
+      const link = { taskId: 't-1', taskName: 'child', projectName: 'repo', promptLine: '' };
+
+      for (const folder of ['8-p', '9-w', '10-b'])
+        expect(await service.linkChildTask(folder, link)).toEqual({ success: true });
+
+      expect(read('8-p')).toContain('status: active\n');
+      expect(read('8-p')).toMatch(
+        /Oleg linked OZdash task child \(repo\) to this ticket\n- 2026-11-06 09:05: Started \(child task child created in OZdash\)\n$/
+      );
+      for (const [folder, status] of [
+        ['9-w', 'waiting'],
+        ['10-b', 'blocked'],
+      ] as const) {
+        expect(read(folder)).toContain(`status: ${status}\n`);
+        expect(read(folder)).not.toContain('Started (');
+        expect(read(folder)).toContain('| D1 | child | child |');
+      }
+    });
+
+    it('MCP create_task: startTicket sets a parked (or legacy draft) ticket active', async () => {
+      write('11-p', ticketText('11', 'parked', 'pm'));
+      write('12-d', ticketText('12', 'draft', 'pm'));
+      const service = makeService();
+      const reason = 'child task x created via MCP create_task';
+
+      expect(await service.startTicket('11', reason)).toEqual({ success: true });
+      expect(await service.startTicket('12', reason)).toEqual({ success: true });
+      expect(read('11-p')).toBe(
+        changed(ticketText('11', 'parked', 'pm'), 'parked', 'active', `Started (${reason})`)
+      );
+      expect(read('12-d')).toBe(
+        changed(ticketText('12', 'draft', 'pm'), 'draft', 'active', `Started (${reason})`)
+      );
+      expect(await service.startTicket('99', reason)).toEqual({
+        success: false,
+        error: 'Ticket #99 was not found in the vault',
+      });
+    });
+
+    it('startTicket leaves active, waiting and blocked tickets alone (no git)', async () => {
+      write('13-a', ticketText('13', 'active'));
+      write('14-w', ticketText('14', 'waiting'));
+      write('15-b', ticketText('15', 'blocked'));
+      const service = makeService();
+      for (const id of ['13', '14', '15'])
+        expect(await service.startTicket(id, 'x')).toEqual({ success: true });
+      expect(read('13-a')).toBe(ticketText('13', 'active'));
+      expect(read('14-w')).toBe(ticketText('14', 'waiting'));
+      expect(read('15-b')).toBe(ticketText('15', 'blocked'));
+      expect(gitCalls).toEqual([]);
+    });
+
+    it('archives a parked ticket as dropped; refuses other statuses', async () => {
+      write('16-p', ticketText('16', 'parked'));
+      write('17-a', ticketText('17', 'active'));
+      const service = makeService();
+
+      expect(await service.archive('16-p')).toEqual({ success: true });
+      expect(read('16-p')).toBe(
+        changed(ticketText('16', 'parked'), 'parked', 'dropped', 'Archived from parked in OZdash')
+      );
+      expect(gitCalls).toEqual(syncCalls);
+
+      expect(await service.archive('17-a')).toEqual({
+        success: false,
+        error: 'Ticket #17 is not parked',
+      });
+      expect(read('17-a')).toBe(ticketText('17', 'active'));
+      expect(await service.archive('../x')).toMatchObject({ success: false });
+    });
+
+    it('archive then restore goes parked -> dropped -> parked', async () => {
+      write('18-p', ticketText('18', 'parked'));
+      const service = makeService();
+      await service.archive('18-p');
+      expect(await service.restore('18-p')).toEqual({ success: true });
+      expect(read('18-p')).toContain('status: parked\n');
+      expect(read('18-p')).toMatch(
+        /Archived from parked in OZdash\n- 2026-11-06 09:05: Restored to parked in OZdash\n$/
+      );
     });
   });
 });

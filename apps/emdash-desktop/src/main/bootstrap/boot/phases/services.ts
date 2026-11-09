@@ -171,7 +171,11 @@ import { HostAttachmentRegistry } from '@main/host/host-attachment-registry';
 import { createSystemNotificationSink } from '@main/host/notifications/system-notification-sink';
 import { registerOzdashAttentionBadge } from '@main/host/ozdash-attention-badge';
 import { installOzdashAttentionChime } from '@main/host/ozdash-attention-chime';
-import { createOzdashTicketsIssueProvider, registerOzdashTickets } from '@main/host/ozdash-tickets';
+import {
+  createOzdashTicketsIssueProvider,
+  ozdashTicketTaskCreated,
+  registerOzdashTickets,
+} from '@main/host/ozdash-tickets';
 import { encryptedAppSecretsStore } from '@main/host/secrets/encrypted-app-secrets-store';
 import { toPlaintextSecretStore } from '@main/host/secrets/plaintext-secret-store';
 import { setTrayVisible } from '@main/host/tray';
@@ -888,6 +892,7 @@ export async function bootServices(
     },
     runtimes,
     readProviderSettings: (key) => conversationPreferences.read(key),
+    onTicketTaskCreated: ozdashTicketTaskCreated, // Fork (ozimakov-st)
     startInitialConversation: createStartInitialConversation({
       db,
       logger: log,

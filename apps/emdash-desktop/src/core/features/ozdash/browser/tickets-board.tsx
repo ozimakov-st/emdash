@@ -1,5 +1,5 @@
 // Fork (ozimakov-st): the Tickets board. Shown in the PM project's main panel.
-// Columns: Needs Oleg, Active, Waiting, Draft, and (on demand) Archive.
+// Columns: Needs Oleg, Active, Waiting, Parked, and (on demand) Archive.
 import {
   Alert,
   Badge,
@@ -281,7 +281,7 @@ function TicketCard({
             P{ticket.priority}
           </Badge>
         )}
-        {ticket.status !== 'active' && ticket.status !== 'waiting' && ticket.status !== 'draft' && (
+        {ticket.status !== 'active' && ticket.status !== 'waiting' && ticket.status !== 'parked' && (
           <Badge variant="outline">{ticket.status}</Badge>
         )}
         {busy && <Spinner size="sm" className="ml-auto" />}
