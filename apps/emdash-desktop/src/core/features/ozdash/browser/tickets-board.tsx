@@ -1,6 +1,20 @@
 // Fork (ozimakov-st): the Tickets board. Shown in the PM project's main panel.
 // Columns: Needs Oleg, Active, Waiting. Parked and Archive are toggle panels on the
 // right (compact rows, built for many tickets); their open/closed state survives restarts.
+// Cards and rows have a P-chip with ▲/▼; cards can be dragged within their priority group.
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragStartEvent,
+  type Modifier,
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Alert,
   Badge,
@@ -14,23 +28,44 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleHelp,
   Hourglass,
+  Pause,
   Play,
   Plus,
   RotateCcw,
 } from 'lucide-react';
 import { when } from 'mobx';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type SyntheticEvent,
+} from 'react';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
+import {
+  priorityCardStyle,
+  priorityChipStyle,
+  priorityColor,
+} from '@core/features/ozdash/api/priority-palette';
 import { newTicketSessionModalProps } from '@core/features/ozdash/api/ticket-issues';
 import {
+  canPark,
+  effectivePriority,
   goalFirstLine,
+  goalPreview,
   groupTickets,
+  MAX_PRIORITY,
+  MIN_PRIORITY,
   panelView,
   relativeUpdated,
+  reorderGroup,
   TICKET_COLUMNS,
   TICKET_PANELS,
   ticketColumn,
@@ -74,7 +109,8 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
   }, []);
 
   const list = ticketsStore.list;
-  const tickets = list?.tickets;
+  // With priority / order changes that are not written yet.
+  const tickets = list ? ticketsStore.tickets : undefined;
   const groups = useMemo(() => groupTickets(tickets ?? [], query), [tickets, query]);
   const totals = useMemo(() => {
     const counts: Record<TicketPanelId, number> = { parked: 0, archive: 0 };
@@ -120,7 +156,7 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
     }
   };
 
-  const changeStatus = async (ticket: TicketSummary, action: 'restore' | 'archive') => {
+  const changeStatus = async (ticket: TicketSummary, action: 'restore' | 'archive' | 'park') => {
     if (busy) return;
     setBusy(ticket.folder);
     setNotice(null);
@@ -128,8 +164,10 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
       const result =
         action === 'restore'
           ? await ticketsStore.restore(ticket.folder)
-          : await ticketsStore.archive(ticket.folder);
-      const verb = action === 'restore' ? 'restore' : 'archive';
+          : action === 'archive'
+            ? await ticketsStore.archive(ticket.folder)
+            : await ticketsStore.park(ticket.folder);
+      const verb = action;
       if (!result.success) {
         setNotice({ tone: 'error', text: `Could not ${verb} #${ticket.id}: ${result.error}` });
       } else if (result.warning) {
@@ -196,6 +234,14 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
           {notice.text}
         </Alert.Root>
       )}
+      {ticketsStore.notice && (
+        <Alert.Root
+          status={ticketsStore.notice.tone === 'error' ? 'destructive' : 'warning'}
+          onDismiss={() => ticketsStore.setNotice(null)}
+        >
+          {ticketsStore.notice.text}
+        </Alert.Root>
+      )}
       {(ticketsStore.loadError || list?.error) && (
         <Alert.Root status="destructive">{ticketsStore.loadError ?? list?.error}</Alert.Root>
       )}
@@ -220,7 +266,10 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
                 tickets={groups[column.id]}
                 vaultPath={list?.vaultPath ?? null}
                 busy={busy}
+                // A filtered list is not a whole priority group: no reordering while searching.
+                sortable={!searching}
                 onOpen={openTicket}
+                onPark={(target) => void changeStatus(target, 'park')}
               />
             ))}
           </div>
@@ -277,14 +326,99 @@ function ColumnHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-function PriorityBadge({ priority }: { priority: number | null }) {
-  if (priority === null) return null;
+/** Keeps clicks, keys and drags on a control from reaching the card or row. */
+const stopEvent = (event: SyntheticEvent) => event.stopPropagation();
+
+/** A static P-chip in the priority color (missing = P3). */
+function PriorityChip({ priority }: { priority: number | null }) {
   return (
-    <Badge tone={priority <= 1 ? 'error' : priority === 2 ? 'warning' : 'neutral'}>
-      P{priority}
-    </Badge>
+    <span
+      className="inline-flex h-4 shrink-0 items-center rounded border px-1 text-[11px] leading-none font-semibold text-foreground tabular-nums"
+      style={priorityChipStyle(priority)}
+      title={`Priority ${effectivePriority(priority)} (${priorityColor(priority).name})`}
+    >
+      P{effectivePriority(priority)}
+    </span>
   );
 }
+
+const PRIORITY_STEP_CLASS =
+  'flex h-2 w-3.5 items-center justify-center text-foreground-muted hover:bg-background-3 hover:text-foreground disabled:pointer-events-none disabled:opacity-30';
+
+/**
+ * The P-chip with ▲ (higher priority = smaller number) and ▼. The board shows each
+ * click at once; the file is written when the clicks stop (see TicketsStore.bumpPriority).
+ */
+const PriorityControl = observer(function PriorityControl({ ticket }: { ticket: TicketSummary }) {
+  const priority = effectivePriority(ticket.priority);
+  return (
+    <span
+      className="inline-flex h-4 shrink-0 items-stretch overflow-hidden rounded border text-[11px] leading-none font-semibold text-foreground"
+      style={priorityChipStyle(ticket.priority)}
+      onClick={stopEvent}
+      onKeyDown={stopEvent}
+      onPointerDown={stopEvent}
+    >
+      <span
+        className="flex items-center px-1 tabular-nums"
+        title={`Priority ${priority} (${priorityColor(ticket.priority).name})`}
+      >
+        P{priority}
+      </span>
+      <span className="flex flex-col border-l border-inherit">
+        <button
+          type="button"
+          className={PRIORITY_STEP_CLASS}
+          aria-label={`Raise priority of ticket ${ticket.id}`}
+          title="Higher priority"
+          disabled={priority <= MIN_PRIORITY}
+          onClick={() => ticketsStore.bumpPriority(ticket.folder, 'up')}
+        >
+          <ChevronUp className="size-2.5" strokeWidth={3} />
+        </button>
+        <button
+          type="button"
+          className={PRIORITY_STEP_CLASS}
+          aria-label={`Lower priority of ticket ${ticket.id}`}
+          title="Lower priority"
+          disabled={priority >= MAX_PRIORITY}
+          onClick={() => ticketsStore.bumpPriority(ticket.folder, 'down')}
+        >
+          <ChevronDown className="size-2.5" strokeWidth={3} />
+        </button>
+      </span>
+    </span>
+  );
+});
+
+/** The same priority, one after another (a sorted column), as drag groups. */
+function priorityGroups(tickets: readonly TicketSummary[]): TicketSummary[][] {
+  const groups: TicketSummary[][] = [];
+  for (const ticket of tickets) {
+    const last = groups[groups.length - 1];
+    if (last && effectivePriority(last[0]!.priority) === effectivePriority(ticket.priority))
+      last.push(ticket);
+    else groups.push([ticket]);
+  }
+  return groups;
+}
+
+/** Cards move up and down only. */
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
+
+/**
+ * Only cards of the dragged card's priority group are drop targets, so a card snaps
+ * inside its group and never lands in another one.
+ */
+const sameGroupCollision: CollisionDetection = (args) => {
+  const group = args.active.data.current?.group as string | undefined;
+  return closestCenter({
+    ...args,
+    droppableContainers: args.droppableContainers.filter(
+      (container) => container.data.current?.group === group
+    ),
+  });
+};
 
 function TicketColumn({
   id,
@@ -292,15 +426,46 @@ function TicketColumn({
   tickets,
   vaultPath,
   busy,
+  sortable,
   onOpen,
+  onPark,
 }: {
   id: TicketColumnId;
   label: string;
   tickets: TicketSummary[];
   vaultPath: string | null;
   busy: string | null;
+  /** Drag & drop within a priority group. */
+  sortable: boolean;
   onOpen: (ticket: TicketSummary) => void;
+  onPark: (ticket: TicketSummary) => void;
 }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [dragGroup, setDragGroup] = useState<string | null>(null);
+  // The click that ends a drag must not open the ticket.
+  const draggedAt = useRef(0);
+  const groups = priorityGroups(tickets);
+  const groupId = (group: TicketSummary[]) => `${id}:P${effectivePriority(group[0]!.priority)}`;
+
+  const onDragStart = (event: DragStartEvent) =>
+    setDragGroup((event.active.data.current?.group as string | undefined) ?? null);
+  const onDragEnd = (event: DragEndEvent) => {
+    setDragGroup(null);
+    draggedAt.current = Date.now();
+    const group = groups.find((entry) => groupId(entry) === event.active.data.current?.group);
+    if (!group || !event.over) return;
+    const next = reorderGroup(
+      group.map((ticket) => ticket.folder),
+      String(event.active.id),
+      String(event.over.id)
+    );
+    if (next) void ticketsStore.reorder(next);
+  };
+  const open = (ticket: TicketSummary) => {
+    if (Date.now() - draggedAt.current < 300) return;
+    onOpen(ticket);
+  };
+
   return (
     <section
       aria-label={label}
@@ -313,61 +478,145 @@ function TicketColumn({
       {tickets.length === 0 ? (
         <p className="px-1 py-2 text-xs text-foreground-passive">Nothing here.</p>
       ) : (
-        tickets.map((ticket) => (
-          <TicketCard
-            key={ticket.folder}
-            ticket={ticket}
-            vaultPath={vaultPath}
-            busy={busy === ticket.folder}
-            onOpen={onOpen}
-          />
-        ))
+        <DndContext
+          sensors={sensors}
+          collisionDetection={sameGroupCollision}
+          modifiers={[verticalOnly]}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragCancel={() => setDragGroup(null)}
+        >
+          {groups.map((group) => (
+            <SortableContext
+              key={groupId(group)}
+              id={groupId(group)}
+              items={group.map((ticket) => ticket.folder)}
+              strategy={verticalListSortingStrategy}
+            >
+              {group.map((ticket) => (
+                <SortableTicketCard
+                  key={ticket.folder}
+                  ticket={ticket}
+                  group={groupId(group)}
+                  // Other groups fade while a card is dragged: they are not drop targets.
+                  dimmed={dragGroup !== null && dragGroup !== groupId(group)}
+                  sortable={sortable && group.length > 1}
+                  vaultPath={vaultPath}
+                  busy={busy === ticket.folder}
+                  onOpen={open}
+                  onPark={onPark}
+                />
+              ))}
+            </SortableContext>
+          ))}
+        </DndContext>
       )}
     </section>
   );
 }
 
-function TicketCard({
-  ticket,
-  vaultPath,
-  busy,
-  onOpen,
-}: {
+function SortableTicketCard({
+  group,
+  dimmed,
+  sortable,
+  ...card
+}: Omit<TicketCardProps, 'drag'> & { group: string; dimmed: boolean; sortable: boolean }) {
+  const { setNodeRef, transform, transition, isDragging, listeners } = useSortable({
+    id: card.ticket.folder,
+    data: { group },
+    disabled: !sortable,
+  });
+  return (
+    <TicketCard
+      {...card}
+      drag={{
+        ref: setNodeRef,
+        listeners: sortable ? listeners : undefined,
+        style: { transform: CSS.Translate.toString(transform), transition },
+        dragging: isDragging,
+        dimmed,
+      }}
+    />
+  );
+}
+
+type TicketCardProps = {
   ticket: TicketSummary;
   /** Shows "New task…" when set. */
   vaultPath: string | null;
   busy: boolean;
   onOpen: (ticket: TicketSummary) => void;
-}) {
+  onPark: (ticket: TicketSummary) => void;
+  drag: {
+    ref: (node: HTMLElement | null) => void;
+    listeners: ReturnType<typeof useSortable>['listeners'];
+    style: CSSProperties;
+    dragging: boolean;
+    dimmed: boolean;
+  };
+};
+
+function TicketCard({ ticket, vaultPath, busy, onOpen, onPark, drag }: TicketCardProps) {
   const waiting = ticket.waitingOn
     .map((row) => (row.owner && row.what ? `${row.owner}: ${row.what}` : row.owner || row.what))
     .join('; ');
+  const goal = goalPreview(ticket.goal);
   return (
     <div
+      ref={drag.ref}
+      {...drag.listeners}
       role="button"
       tabIndex={0}
       aria-label={`Open ticket ${ticket.id}: ${ticket.title}`}
       onClick={() => onOpen(ticket)}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onOpen(ticket);
         }
       }}
+      style={{ ...priorityCardStyle(ticket.priority), ...drag.style }}
       className={cn(
-        'group flex cursor-pointer flex-col gap-1.5 rounded-md border border-border bg-background p-2.5 text-left transition-colors hover:border-foreground-passive/40 focus-visible:outline-2',
-        busy && 'opacity-60'
+        'group flex cursor-pointer flex-col gap-1.5 rounded-md border border-l-[3px] p-2.5 text-left transition-[border-color,opacity] hover:brightness-110 focus-visible:outline-2',
+        busy && 'opacity-60',
+        drag.dimmed && 'opacity-40',
+        drag.dragging && 'relative z-10 cursor-grabbing shadow-lg'
       )}
     >
       <div className="flex items-center gap-1.5 text-xs">
         <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-        <PriorityBadge priority={ticket.priority} />
+        <PriorityControl ticket={ticket} />
         {ticket.status === 'blocked' && <Badge variant="outline">blocked</Badge>}
-        {busy && <Spinner size="sm" className="ml-auto" />}
+        <span className="ml-auto flex items-center gap-1">
+          {busy && <Spinner size="sm" />}
+          {canPark(ticket) && (
+            <button
+              type="button"
+              className="flex size-5 items-center justify-center rounded text-foreground-passive opacity-0 group-hover:opacity-100 hover:bg-background-3 hover:text-foreground focus-visible:opacity-100 disabled:opacity-50"
+              aria-label={`Park ticket ${ticket.id}`}
+              title="Park"
+              disabled={busy}
+              onPointerDown={stopEvent}
+              onKeyDown={stopEvent}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPark(ticket);
+              }}
+            >
+              <Pause className="size-3" />
+            </button>
+          )}
+        </span>
       </div>
       <div className="line-clamp-2 text-sm font-medium text-foreground">{ticket.title}</div>
+      {goal && (
+        <p className="line-clamp-3 text-xs text-foreground-muted" title={ticket.goal ?? undefined}>
+          {goal}
+        </p>
+      )}
       {ticket.nextStep && (
-        <div className="line-clamp-2 text-xs text-foreground-muted">
+        <div className="line-clamp-1 text-xs text-foreground-muted">
           <span className="text-foreground-passive">Next: </span>
           {ticket.nextStep}
         </div>
@@ -375,7 +624,7 @@ function TicketCard({
       {waiting && (
         <div className="flex items-start gap-1 text-xs text-foreground-muted">
           <Hourglass className="mt-0.5 size-3 shrink-0 text-foreground-passive" aria-hidden />
-          <span className="line-clamp-2">{waiting}</span>
+          <span className="line-clamp-1">{waiting}</span>
         </div>
       )}
       {ticket.openQuestions.count > 0 && (
@@ -443,7 +692,7 @@ function RowSummary({ ticket, busy }: { ticket: TicketSummary; busy: boolean }) 
   return (
     <>
       <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
-      <PriorityBadge priority={ticket.priority} />
+      <PriorityControl ticket={ticket} />
       <span className="min-w-0 flex-1 truncate text-foreground" title={ticket.title}>
         {ticket.title}
       </span>
@@ -542,7 +791,7 @@ function ParkedRow({
         >
           <div className="flex items-center gap-1.5 text-xs">
             <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-            <PriorityBadge priority={ticket.priority} />
+            <PriorityChip priority={ticket.priority} />
           </div>
           <div className="text-sm font-medium text-foreground">{ticket.title}</div>
           <p className="line-clamp-3 text-xs text-foreground-muted">{goal ?? 'No goal yet.'}</p>
