@@ -240,7 +240,8 @@ export function EditTicketDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       {open && (
-        <Dialog.Content size="sm">
+        // 20% wider than size "sm" (24rem).
+        <Dialog.Content size="sm" style={{ maxWidth: 'min(28.8rem, 100%)' }}>
           <NewTicketForm
             projectId="" // Not used when editing.
             ticket={ticket}
