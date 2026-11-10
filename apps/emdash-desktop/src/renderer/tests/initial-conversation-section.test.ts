@@ -422,28 +422,31 @@ describe('useInitialConversationState', () => {
     expect(Object.values(mocks.preferences.entries)[0]?.acp.options).toEqual({ model: 'sonnet' });
   });
 
-  it('starts new scopes off and isolates hosts and transports', async () => {
+  // Fork (ozimakov-st): new scopes start with auto-approve on.
+  it('starts new scopes on and isolates hosts and transports', async () => {
     await renderProbe('project-1');
-    expect(latestState?.autoApprove).toBe(false);
-    await act(async () => latestState?.setAutoApprove(true));
+    expect(latestState?.autoApprove).toBe(true);
+    await act(async () => latestState?.setAutoApprove(false));
     await act(async () => latestState?.setUseChatUi(true));
     expect(latestState?.autoApprove).toBe(false);
-    await act(async () => latestState?.setAutoApprove(true));
 
     mocks.getProjectSshConnectionId.mockReturnValue('remote-1');
     await renderProbe('project-2');
     expect(latestState?.autoApprove).toBe(false);
     mocks.getProjectSshConnectionId.mockReturnValue(undefined);
     await renderProbe('project-1');
-    expect(latestState?.autoApprove).toBe(false);
     await act(async () => latestState?.setUseChatUi(false));
+    expect(latestState?.autoApprove).toBe(false);
+    mocks.getProjectSshConnectionId.mockReturnValue('remote-1');
+    await renderProbe('project-2');
     expect(latestState?.autoApprove).toBe(true);
+    mocks.getProjectSshConnectionId.mockReturnValue(undefined);
   });
 
   it('ignores the retired global localStorage auto-approve preference', async () => {
-    dom.window.localStorage.setItem('initial-conversation:auto-approve-enabled', 'true');
+    dom.window.localStorage.setItem('initial-conversation:auto-approve-enabled', 'false');
     await renderProbe('project-1');
-    expect(latestState?.autoApprove).toBe(false);
+    expect(latestState?.autoApprove).toBe(true);
   });
 
   it('keeps new automation drafts independent and requires opt-in for each', async () => {
