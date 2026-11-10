@@ -21,6 +21,7 @@ import {
   type EditTicketInput,
   type LinkPmSessionInput,
   type OpenTicketSessionOptions,
+  type TicketSummary,
 } from '@core/features/ozdash/api/tickets';
 import { readAgentPalette, resolvePmSessionLaunch } from '@core/features/ozdash/node/agent-palette';
 import { linkTicketTask } from '@core/features/ozdash/node/link-ticket-task';
@@ -64,6 +65,14 @@ let onTicketTaskCreated: ((event: McpTicketTaskCreated) => void) | null = null;
  */
 export function ozdashTicketTaskCreated(event: McpTicketTaskCreated): void {
   onTicketTaskCreated?.(event);
+}
+
+/** The vault's tickets as last read by the watcher (the PM relay reads them). */
+let latestTickets: readonly TicketSummary[] = [];
+
+/** The tickets from the last vault read (empty before the first read). */
+export function ozdashTicketsSnapshot(): readonly TicketSummary[] {
+  return latestTickets;
 }
 
 const MAX_TITLE = 200;
@@ -298,6 +307,7 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       })
     : null;
   const stopWatching = service.watch((next) => {
+    if (!next.error) latestTickets = next.tickets;
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(changed, next);
     }

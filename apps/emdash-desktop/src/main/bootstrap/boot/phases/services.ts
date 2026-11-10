@@ -173,8 +173,10 @@ import { HostAttachmentRegistry } from '@main/host/host-attachment-registry';
 import { createSystemNotificationSink } from '@main/host/notifications/system-notification-sink';
 import { registerOzdashAttentionBadge } from '@main/host/ozdash-attention-badge';
 import { installOzdashAttentionChime } from '@main/host/ozdash-attention-chime';
+import { installOzdashPmRelay } from '@main/host/ozdash-pm-relay';
 import {
   createOzdashTicketsIssueProvider,
+  ozdashTicketsSnapshot,
   ozdashTicketTaskCreated,
   registerOzdashTickets,
 } from '@main/host/ozdash-tickets';
@@ -935,7 +937,10 @@ export async function bootServices(
   appScope.add(() => ipcMain.removeHandler(OZDASH_TASK_TICKETS_CHANNEL));
   // Fork (ozimakov-st): the Tickets board (see main/host/ozdash-tickets.ts).
   appScope.add(registerOzdashTickets(mcpServer.dependencies, log));
-
+  // OZdash: tell a ticket's PM session when one of its child sessions comes back.
+  appScope.add(
+    installOzdashPmRelay(mcpServer.dependencies, agentStatusService, ozdashTicketsSnapshot, log)
+  );
   // OZdash: Dock badge with the number of tasks that need attention.
   appScope.add(registerOzdashAttentionBadge());
   // OZdash: Glass chime + macOS banner when a task comes back to Oleg.
