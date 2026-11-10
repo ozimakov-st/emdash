@@ -55,6 +55,22 @@ Edit, Flash only changes the priority (no start). P0 cards, rows and the Ticket 
 gold (`#F5C451`) with a soft glow and a `⚡ P0` chip. In the popup, ▲ stops at P1 and ▼
 from P0 goes to P1.
 
+**Agent palette** (`<vault>/context/agents.md`, a `| name | agent | model | effort | use for |`
+table; code in `ozdash/api/agent-palette.ts`). The file is read each time, so edits apply at once.
+- A ticket's PM session (Start, card open, flash) uses the `pm` row, with auto-approve. No
+  file or no `pm` row (or an unknown agent in it): claude + opus.
+- The New Task dialog (also "New task…" on a card) shows the rows as chips above the agent
+  picker. A chip sets agent + model (+ effort) and turns auto-approve on for that agent.
+- No permission prompts by default: MCP `create_task` defaults `autoApprove` to true (pass
+  `false` to get prompts), and a terminal agent with no saved choice starts with the
+  New Task "Auto-approve permissions" switch on (upstream: off).
+- `create_task` accepts any `model` id the CLI knows (the plugin lists are only suggestions)
+  and an `effort`. Command lines: claude `--dangerously-skip-permissions --model <m>
+  --effort <e>`; codex `-c approval_policy=never -c sandbox_mode=danger-full-access
+  --dangerously-bypass-hook-trust -m <m> -c model_reasoning_effort=<e>`; cursor `-f
+  --approve-mcps --model <m>` (no effort flag: put it in the model id, for example
+  `cursor-grok-4.6-high`). Effort applies in terminal mode only.
+
 - Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
