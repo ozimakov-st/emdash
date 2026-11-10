@@ -31,6 +31,7 @@ export function mapConversationRowToConversation(row: ConversationRow): Conversa
     autoApprove: config?.type === 'pty' ? config.autoApprove : undefined,
     sessionId: row.providerSessionId ?? undefined,
     model: config?.type === 'pty' ? config.model : undefined,
+    effort: config?.type === 'pty' ? config.effort : undefined,
     options: config?.type === 'acp' ? config.options : undefined,
     initialQueue: initialQueueFromRow(row),
     lastInteractedAt: row.lastSessionActivityAt ?? null,

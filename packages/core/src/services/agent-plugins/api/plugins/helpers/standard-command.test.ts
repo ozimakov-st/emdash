@@ -192,4 +192,31 @@ describe('buildStandardCommand', () => {
     expect(mIdx).toBeGreaterThanOrEqual(0);
     expect(result.args[mIdx + 1]).toBe('gpt-5-codex');
   });
+
+  // Fork (ozimakov-st): reasoning effort.
+  it('injects effortFlag after the model when ctx.effort is non-empty', () => {
+    const result = buildStandardCommand(
+      { cli: 'claude', autoApprove: false, isResuming: false, model: 'opus', effort: 'high' },
+      { modelFlag: '--model', effortFlag: '--effort' }
+    );
+
+    expect(result.args).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
+  it('splits a multi-word =-suffixed effortFlag and joins the value to its last part', () => {
+    const result = buildStandardCommand(
+      { cli: 'codex', autoApprove: false, isResuming: false, model: '', effort: 'high' },
+      { effortFlag: '-c model_reasoning_effort=' }
+    );
+
+    expect(result.args).toEqual(['-c', 'model_reasoning_effort=high']);
+  });
+
+  it('does not inject effortFlag when ctx.effort is absent or empty', () => {
+    const spec = { effortFlag: '--effort' };
+    const ctx = { cli: 'claude', autoApprove: false, isResuming: false, model: '' };
+
+    expect(buildStandardCommand(ctx, spec).args).toEqual([]);
+    expect(buildStandardCommand({ ...ctx, effort: '' }, spec).args).toEqual([]);
+  });
 });

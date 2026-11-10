@@ -15,6 +15,11 @@ export type CommandContext = {
   providerSessionId?: string;
   isResuming?: boolean;
   model: string;
+  /**
+   * Fork (ozimakov-st): reasoning effort (e.g. 'high'). Passed with the spec's
+   * `effortFlag`; ignored by providers without one. Empty or absent = CLI default.
+   */
+  effort?: string;
 };
 
 export type AgentCommand = {

@@ -23,6 +23,8 @@ const ptyConfigV1 = z.object({
   initialPrompt: z.string().optional(),
   /** Model to pass to the agent CLI. Empty string or absent = CLI default. */
   model: z.string().optional(),
+  /** Fork (ozimakov-st): reasoning effort for the agent CLI. Absent = CLI default. */
+  effort: z.string().optional(),
 });
 
 const acpConfigV1 = z.object({

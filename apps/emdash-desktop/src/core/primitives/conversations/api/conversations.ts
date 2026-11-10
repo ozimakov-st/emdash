@@ -31,6 +31,8 @@ export type Conversation = {
   options?: Record<string, string | boolean>;
   /** Model to pass to the TUI CLI. Absent or empty string means use the CLI default. */
   model?: string;
+  /** Fork (ozimakov-st): reasoning effort for the TUI CLI (e.g. 'high'). Absent = CLI default. */
+  effort?: string;
   /** Initial queued prompts to deliver on first ACP spawn. Only present before sessionId is set. */
   initialQueue?: InitialQueuePrompt[];
   isInitialConversation: boolean | null;

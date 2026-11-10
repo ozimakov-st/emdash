@@ -56,6 +56,12 @@ export const plugin = definePlugin(
     models: {
       kind: 'selectable',
       modelOptions: {
+        // Fork (ozimakov-st): newest model in ~/.codex/models_cache.json.
+        'gpt-6.1-sol': {
+          name: '6.1 Sol',
+          description: 'Newest workhorse model for coding and everyday work.',
+          modelFeatures: { intelligence: 5, speed: 4 },
+        },
         'gpt-6-astra': {
           name: '6 Astra',
           description: 'Frontier intelligence for the most demanding work.',
@@ -91,6 +97,17 @@ export const plugin = definePlugin(
           description: 'Legacy coding model.',
           modelFeatures: { intelligence: 5, speed: 3 },
         },
+      },
+    },
+    // Fork (ozimakov-st): `codex -c model_reasoning_effort=<level>` in terminal mode.
+    effort: {
+      kind: 'selectable',
+      effortOptions: {
+        minimal: { label: 'Minimal', level: 1 },
+        low: { label: 'Low', level: 2 },
+        medium: { label: 'Medium', level: 3 },
+        high: { label: 'High', level: 4 },
+        xhigh: { label: 'Extra high', level: 5 },
       },
     },
     hooks: {
@@ -184,6 +201,8 @@ export const provider = registerPluginBehavior(plugin, {
         resumeWithoutSessionFlag: 'resume --last',
         deduplicateFlags: ['--dangerously-bypass-approvals-and-sandbox'],
         modelFlag: '-m',
+        // Fork (ozimakov-st): `codex -c model_reasoning_effort=<level>`.
+        effortFlag: '-c model_reasoning_effort=',
       }),
   },
   hooks: buildCodexHookConfig(),

@@ -165,6 +165,7 @@ export class TuiConversationProvider implements ConversationProvider {
       // back to the conversation id), so the index learns it at spawn (spec §3.1).
       chosenSessionId: agentSession.isResuming ? null : agentSession.sessionId,
       model: conversation.model ?? null,
+      effort: conversation.effort ?? null,
       initialPrompt: effectiveInitialPrompt,
       autoApprove: conversation.autoApprove ?? false,
       trustWorkspace,

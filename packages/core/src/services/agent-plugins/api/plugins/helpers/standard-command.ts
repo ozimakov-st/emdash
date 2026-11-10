@@ -59,6 +59,11 @@ export type StandardCommandSpec = {
    * Supports both '--flag value' and '--flag=value' forms via appendFlagValue.
    */
   modelFlag?: string;
+  /**
+   * Fork (ozimakov-st): CLI flag for reasoning effort, e.g. '--effort' (claude) or
+   * '-c model_reasoning_effort=' (codex). Applied when ctx.effort is non-empty.
+   */
+  effortFlag?: string;
 };
 
 /**
@@ -129,6 +134,11 @@ export function buildStandardCommand(ctx: CommandContext, spec: StandardCommandS
     appendFlagValue(args, spec.modelFlag, ctx.model);
   }
 
+  // Reasoning effort (fork)
+  if (spec.effortFlag && ctx.effort) {
+    appendFlagValue(args, spec.effortFlag, ctx.effort);
+  }
+
   // User extra args
   if (ctx.extraArgs?.length) {
     args.push(...ctx.extraArgs);
@@ -165,7 +175,10 @@ function splitFlag(flag: string): string[] {
 
 function appendFlagValue(args: string[], flag: string, value: string): void {
   if (flag.endsWith('=')) {
-    args.push(`${flag}${value}`);
+    // '--flag=' -> '--flag=<value>'; '-c key=' -> '-c', 'key=<value>'.
+    const parts = splitFlag(flag);
+    parts[parts.length - 1] = `${parts[parts.length - 1]}${value}`;
+    args.push(...parts);
   } else {
     args.push(...splitFlag(flag), value);
   }

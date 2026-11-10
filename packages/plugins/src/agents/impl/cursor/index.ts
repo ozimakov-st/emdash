@@ -26,6 +26,16 @@ export const plugin = definePlugin(
     autoApprove: {
       kind: 'supported',
     },
+    // Fork (ozimakov-st): `cursor-agent --model <id>`. A short list for the picker; any id
+    // from `cursor-agent --list-models` is accepted (Emdash passes it through as is).
+    models: {
+      kind: 'selectable',
+      modelOptions: {
+        auto: { name: 'Auto', description: "Cursor's default model" },
+        'composer-2.5': { name: 'Composer 2.5' },
+        'cursor-grok-4.6-high': { name: 'Grok 4.6' },
+      },
+    },
     hooks: {
       kind: 'config',
       scope: 'global',
@@ -90,6 +100,7 @@ export const provider = registerPluginBehavior(plugin, {
         autoApproveFlag: '-f --approve-mcps',
         initialPromptFlag: '',
         resumeFlag: '--resume',
+        modelFlag: '--model',
       }),
   },
   hooks: buildCursorHookConfig(),

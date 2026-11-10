@@ -22,6 +22,8 @@ const v1Schema = z.object({
       initialQueue: z.array(initialQueuePromptSchema).optional(),
       options: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
       model: z.string().optional(),
+      /** Fork (ozimakov-st): reasoning effort for terminal agents (e.g. 'high'). */
+      effort: z.string().optional(),
       type: z.enum(['pty', 'acp']).optional(),
     })
     .optional(),

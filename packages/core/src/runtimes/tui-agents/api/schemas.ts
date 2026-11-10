@@ -16,6 +16,8 @@ export const tuiAgentStartInputSchema = z.object({
    */
   chosenSessionId: z.string().nullable().optional(),
   model: z.string().nullable(),
+  /** Fork (ozimakov-st): reasoning effort for providers with an effort flag. */
+  effort: z.string().nullable().optional(),
   initialPrompt: z.string().optional(),
   autoApprove: z.boolean().optional(),
   trustWorkspace: z.boolean().optional(),

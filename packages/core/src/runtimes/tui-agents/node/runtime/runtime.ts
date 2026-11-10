@@ -540,6 +540,7 @@ export class TuiAgentsRuntime {
       providerSessionId: config.input.sessionId ?? undefined,
       isResuming,
       model: config.input.model ?? '',
+      effort: config.input.effort ?? undefined,
     });
     if (!this.isCurrentGeneration(config.input.conversationId, generation)) {
       return this.cancelledSpawn(config.input.conversationId);

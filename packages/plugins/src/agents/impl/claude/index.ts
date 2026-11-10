@@ -77,6 +77,17 @@ export const plugin = definePlugin(
         },
       },
     },
+    // Fork (ozimakov-st): `claude --effort <level>` in terminal mode.
+    effort: {
+      kind: 'selectable',
+      effortOptions: {
+        low: { label: 'Low', level: 1 },
+        medium: { label: 'Medium', level: 2 },
+        high: { label: 'High', level: 3 },
+        xhigh: { label: 'Extra high', level: 4 },
+        max: { label: 'Max', level: 5 },
+      },
+    },
     hooks: {
       kind: 'config',
       scope: 'global',
@@ -171,6 +182,8 @@ export const provider = registerPluginBehavior(plugin, {
         resumeFlag: '--resume',
         sessionIdFlag: '--session-id',
         modelFlag: '--model',
+        // Fork (ozimakov-st): `claude --effort <level>`.
+        effortFlag: '--effort',
       }),
   },
   hooks: buildClaudeHookConfig(),

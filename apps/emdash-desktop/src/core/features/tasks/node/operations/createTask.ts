@@ -273,6 +273,7 @@ export async function prepareCreateTask(
             ...(ic.autoApprove !== undefined && { autoApprove: ic.autoApprove }),
             ...(ic.initialPrompt?.trim() && { initialPrompt: ic.initialPrompt.trim() }),
             ...(ic.model && { model: ic.model }),
+            ...(ic.effort && { effort: ic.effort }),
           };
     if (conversationWorkspacePath === null) {
       return err({
