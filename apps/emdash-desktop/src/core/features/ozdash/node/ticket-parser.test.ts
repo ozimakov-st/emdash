@@ -58,6 +58,14 @@ describe('parseTicket', () => {
     });
   });
 
+  it('reads priority 0 (a flash ticket)', () => {
+    const result = parseTicket(
+      TICKET.replace('priority: 2               # 1 = highest', 'priority: 0  # flash'),
+      '123-add-scim'
+    );
+    expect(result.success && result.ticket.priority).toBe(0);
+  });
+
   it('finds the next step, open dependencies and open questions', () => {
     const result = parseTicket(TICKET, '123-add-scim');
     if (!result.success) throw new Error(result.error);

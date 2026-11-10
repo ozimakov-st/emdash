@@ -4,6 +4,9 @@ import {
   canPark,
   compareTickets,
   effectivePriority,
+  FLASH_PRIORITY,
+  isFlashPriority,
+  isValidPriority,
   goalFirstLine,
   goalPreview,
   groupTickets,
@@ -99,11 +102,26 @@ describe('groupTickets', () => {
 });
 
 describe('priority', () => {
-  it('reads a missing priority as P3 and clamps out-of-range values', () => {
+  it('reads a missing priority as P3, 0 as flash, and clamps out-of-range values', () => {
     expect(effectivePriority(null)).toBe(3);
     expect(effectivePriority(1)).toBe(1);
-    expect(effectivePriority(0)).toBe(1);
+    expect(effectivePriority(0)).toBe(FLASH_PRIORITY);
+    expect(effectivePriority(-2)).toBe(0);
     expect(effectivePriority(9)).toBe(4);
+    expect(isFlashPriority(0)).toBe(true);
+    expect(isFlashPriority(1)).toBe(false);
+    expect(isFlashPriority(null)).toBe(false);
+  });
+
+  it('accepts priorities 0 (flash) to 4 only', () => {
+    expect([0, 1, 2, 3, 4].every(isValidPriority)).toBe(true);
+    expect([-1, 5, 2.5, Number.NaN].some(isValidPriority)).toBe(false);
+  });
+
+  it('▲ stops at P1 (P0 only with Flash); ▼ from P0 is P1', () => {
+    expect(bumpPriority(1, 'up')).toBeNull();
+    expect(bumpPriority(0, 'up')).toBeNull();
+    expect(bumpPriority(0, 'down')).toBe(1);
   });
 
   it('bumps up (smaller number) and down within P1-P4, null at the ends', () => {
@@ -119,6 +137,15 @@ describe('priority', () => {
 });
 
 describe('compareTickets', () => {
+  it('sorts a flash ticket (P0) first', () => {
+    const tickets = [
+      ticket({ id: '1', priority: 1, rank: 10, updated: '2026-11-09' }),
+      ticket({ id: '2', priority: 0, rank: null, updated: '2026-01-01' }),
+      ticket({ id: '3', priority: null, rank: null }),
+    ];
+    expect([...tickets].sort(compareTickets).map((t) => t.id)).toEqual(['2', '1', '3']);
+  });
+
   it('sorts by priority, then rank (missing last), then updated desc, then id', () => {
     const tickets = [
       ticket({ id: '1', priority: 2, rank: null, updated: '2026-11-09' }),

@@ -5,11 +5,13 @@ import { computed, makeAutoObservable, observable, runInAction } from 'mobx';
 import {
   bumpPriority,
   effectivePriority,
+  FLASH_PRIORITY,
   pmTaskHasNoTicket,
   type CreateTicketInput,
   type CreateTicketResult,
   type EditTicketInput,
   type LinkPmSessionInput,
+  type OpenTicketSessionOptions,
   type OpenTicketSessionResult,
   type OzdashTicketsBridge,
   type TicketActionResult,
@@ -28,6 +30,12 @@ export const PRIORITY_DEBOUNCE_MS = 1_000;
 type LocalEdit = { priority?: number; rank?: number };
 
 export type TicketsNotice = { tone: 'error' | 'warning'; text: string };
+
+/** "New ticket" with Flash on: the new ticket, and its PM session (null when not created). */
+export type FlashTicketResult = {
+  created: CreateTicketResult;
+  session: OpenTicketSessionResult | null;
+};
 
 export class TicketsStore {
   list: TicketList | null = null;
@@ -256,11 +264,31 @@ export class TicketsStore {
     }
   }
 
-  async openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult> {
+  /**
+   * A new flash ticket (P0): creates it, then starts it at once the same way as Start
+   * on the board (active + PM session `/oz-pm <id>`), with the Log `Started (flash ticket)`.
+   */
+  async createFlashTicket(
+    input: Omit<CreateTicketInput, 'priority' | 'existingTask'>
+  ): Promise<FlashTicketResult> {
+    const created = await this.createTicket({ ...input, priority: FLASH_PRIORITY });
+    if (!created.success) return { created, session: null };
+    const session = await this.openSession(created.folder, created.projectId, { flash: true });
+    void this.reload();
+    return { created, session };
+  }
+
+  async openSession(
+    folder: string,
+    projectId: string,
+    options?: OpenTicketSessionOptions
+  ): Promise<OpenTicketSessionResult> {
     const api = bridge();
     if (!api?.openTicketSession) return { success: false, error: 'Not available outside OZdash' };
     try {
-      return await api.openTicketSession(folder, projectId);
+      return await (options
+        ? api.openTicketSession(folder, projectId, options)
+        : api.openTicketSession(folder, projectId));
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }

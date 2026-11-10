@@ -32,7 +32,10 @@ export type TicketSummary = {
   id: string;
   title: string;
   status: TicketStatus;
-  /** 1 = highest; null when missing or not a number (shown and sorted as P3). */
+  /**
+   * 1 = highest of P1-P4; 0 = a flash ticket (P0: urgent, short work, above P1); null
+   * when missing or not a number (shown and sorted as P3).
+   */
   priority: number | null;
   /** Manual order within the same priority (lower = higher on the board); null when missing. */
   rank: number | null;
@@ -73,6 +76,12 @@ export type TicketActionResult =
   | { success: true; warning?: string }
   | { success: false; error: string };
 
+/** Why a PM session is opened; the Log gets `Started (<reason>)` when the ticket starts. */
+export type OpenTicketSessionOptions = {
+  /** A new flash ticket, started right after it was created: `Started (flash ticket)`. */
+  flash?: boolean;
+};
+
 export type OpenTicketSessionResult =
   | { success: true; projectId: string; taskId: string; created: boolean; warning?: string }
   | { success: false; error: string };
@@ -82,7 +91,7 @@ export type CreateTicketInput = {
   title: string;
   /** Goes under `## Goal`; may be empty. */
   description: string;
-  /** 1-4; missing = 3. */
+  /** 0-4 (0 = flash); missing = 3. */
   priority?: number;
   /** The PM project. */
   projectId: string;
@@ -95,7 +104,7 @@ export type EditableTicketFields = {
   title: string;
   /** The `## Goal` text; may be empty. */
   goal: string;
-  /** 1-4. */
+  /** 0-4 (0 = flash). */
   priority: number;
 };
 
@@ -152,12 +161,16 @@ export type OzdashTicketsBridge = {
   restoreTicket(folder: string): Promise<TicketActionResult>;
   /** Parked ticket -> dropped. */
   archiveTicket(folder: string): Promise<TicketActionResult>;
-  openTicketSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
+  openTicketSession(
+    folder: string,
+    projectId: string,
+    options?: OpenTicketSessionOptions
+  ): Promise<OpenTicketSessionResult>;
   /** After a task was created from a ticket (see ticket-issues.ts). */
   linkTicketTask(input: LinkTicketTaskInput): Promise<LinkTicketTaskResult>;
   createTicket(input: CreateTicketInput): Promise<CreateTicketResult>;
   linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
-  /** Writes `priority:` (1-4) with a Log line. */
+  /** Writes `priority:` (0-4) with a Log line. */
   setTicketPriority(folder: string, priority: number): Promise<TicketActionResult>;
   /** Rewrites `rank:` (10, 20, 30…) of one priority group, in this order. */
   reorderTickets(folders: string[]): Promise<TicketActionResult>;
@@ -242,29 +255,43 @@ export function ticketMatchesQuery(
   return words.every((word) => haystack.includes(word));
 }
 
+/** A flash ticket: urgent, short work (a quick investigation or a quick build). Above P1. */
+export const FLASH_PRIORITY = 0;
+/** The highest priority ▲ reaches (P0 is set only with the Flash toggle). */
 export const MIN_PRIORITY = 1;
 export const MAX_PRIORITY = 4;
 /** The priority of a ticket without one. */
 export const DEFAULT_PRIORITY = 3;
 
-/** The priority the board shows and sorts by: 1-4; missing = 3; out of range = clamped. */
+/** The priority the board shows and sorts by: 0-4; missing = 3; out of range = clamped. */
 export function effectivePriority(priority: number | null): number {
   if (priority === null || !Number.isFinite(priority)) return DEFAULT_PRIORITY;
-  return Math.min(MAX_PRIORITY, Math.max(MIN_PRIORITY, Math.round(priority)));
+  return Math.min(MAX_PRIORITY, Math.max(FLASH_PRIORITY, Math.round(priority)));
+}
+
+/** True for a flash ticket (P0). */
+export function isFlashPriority(priority: number | null): boolean {
+  return priority !== null && effectivePriority(priority) === FLASH_PRIORITY;
+}
+
+/** A priority a ticket file may get: an integer 0 (flash) to 4. */
+export function isValidPriority(priority: number): boolean {
+  return Number.isInteger(priority) && priority >= FLASH_PRIORITY && priority <= MAX_PRIORITY;
 }
 
 /**
  * The priority after one ▲ (`up`, higher priority = smaller number) or ▼ (`down`).
- * Null at the ends (P1 cannot go up, P4 cannot go down).
+ * Null at the ends (P1 and P0 cannot go up, P4 cannot go down). ▼ from P0 is P1.
  */
 export function bumpPriority(priority: number | null, direction: 'up' | 'down'): number | null {
   const current = effectivePriority(priority);
   const next = direction === 'up' ? current - 1 : current + 1;
-  return next < MIN_PRIORITY || next > MAX_PRIORITY ? null : next;
+  if (direction === 'up') return current <= MIN_PRIORITY ? null : next;
+  return next > MAX_PRIORITY ? null : next;
 }
 
 /**
- * Board order: priority (1 first; missing = 3), then rank (missing after ranked ones),
+ * Board order: priority (0 = flash first, then 1; missing = 3), then rank (missing after ranked ones),
  * then most recently updated, then id.
  */
 export function compareTickets(

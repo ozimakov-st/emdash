@@ -15,13 +15,15 @@ import {
   effectivePriority,
   isArchived,
   isStartedStatus,
+  FLASH_PRIORITY,
+  isValidPriority,
   MAX_PRIORITY,
-  MIN_PRIORITY,
   ticketSessionName,
   type CreateTicketInput,
   type CreateTicketResult,
   type EditTicketInput,
   type LinkPmSessionInput,
+  type OpenTicketSessionOptions,
   type OpenTicketSessionResult,
   type TicketActionResult,
   type TicketList,
@@ -55,6 +57,9 @@ import { pullVault, resolveVaultRepo, runGit, syncVault, type GitRunner } from '
 const DEFAULT_VAULT = 'Projects/work/vault';
 /** The `Started (<reason>)` Log line when the board opens or starts a PM session. */
 const BOARD_START_REASON = 'PM session opened from the OZdash board';
+/** The `Started (<reason>)` Log line when a new flash ticket starts right away. */
+const FLASH_START_REASON = 'flash ticket';
+const PRIORITY_ERROR = `Priority must be ${FLASH_PRIORITY}-${MAX_PRIORITY} (0 = flash)`;
 const WATCH_DEBOUNCE_MS = 400;
 const POLL_MS = 5_000;
 
@@ -141,8 +146,15 @@ export interface TicketsService {
   restore(folder: string): Promise<TicketActionResult>;
   /** Parked ticket -> dropped. */
   archive(folder: string): Promise<TicketActionResult>;
-  /** Opens the PM session (creates it when missing) and starts a parked ticket. */
-  openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult>;
+  /**
+   * Opens the PM session (creates it when missing) and starts a parked ticket. The Log
+   * reason is the board's, or `flash ticket` with `options.flash`.
+   */
+  openSession(
+    folder: string,
+    projectId: string,
+    options?: OpenTicketSessionOptions
+  ): Promise<OpenTicketSessionResult>;
   /** The ticket with this id, or null. */
   findTicket(ticketId: string): Promise<TicketSummary | null>;
   /**
@@ -165,7 +177,7 @@ export interface TicketsService {
    * the ticket, then syncs.
    */
   linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult>;
-  /** Sets `priority:` (1-4) with a Log line, then syncs. */
+  /** Sets `priority:` (0-4, 0 = flash) with a Log line, then syncs. */
   setPriority(folder: string, priority: number): Promise<TicketActionResult>;
   /**
    * Manual order of one priority group: `rank:` 10, 20, 30… in this order. One write
@@ -183,10 +195,6 @@ export interface TicketsService {
   sync(message: string): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
-}
-
-function isValidPriority(priority: number): boolean {
-  return Number.isInteger(priority) && priority >= MIN_PRIORITY && priority <= MAX_PRIORITY;
 }
 
 function isPlainFolderName(folder: string): boolean {
@@ -328,7 +336,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     const title = cleanTitle(input.title);
     if (!title) return { success: false, error: 'The title is empty' };
     if (input.priority !== undefined && !isValidPriority(input.priority))
-      return { success: false, error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}` };
+      return { success: false, error: PRIORITY_ERROR };
     const { projectId, existingTask } = input;
     if (existingTask && !(await options.pmSessionExists(existingTask.id, projectId)))
       return { success: false, error: 'The task is not in the PM project' };
@@ -388,7 +396,12 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     );
   }
 
-  async function openSession(folder: string, projectId: string): Promise<OpenTicketSessionResult> {
+  async function openSession(
+    folder: string,
+    projectId: string,
+    start: OpenTicketSessionOptions
+  ): Promise<OpenTicketSessionResult> {
+    const reason = start.flash ? FLASH_START_REASON : BOARD_START_REASON;
     const found = await readTicket(folder);
     if (!found.success) return found;
     const { ticket } = found;
@@ -404,8 +417,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
       const started = await serialize(() =>
         editAndSync(
           folder,
-          (content, current) =>
-            startTicketContent(content, current.status, BOARD_START_REASON, now()),
+          (content, current) => startTicketContent(content, current.status, reason, now()),
           (before) => `tickets: start #${before.id} (OZdash)`
         )
       );
@@ -427,7 +439,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
         (content, current) =>
           chain(content, [
             (text) => setPmSessionContent(text, taskId, now()),
-            (text) => startTicketContent(text, current.status, BOARD_START_REASON, now()),
+            (text) => startTicketContent(text, current.status, reason, now()),
           ]),
         (before) => `tickets: PM session for #${before.id} (OZdash)`
       )
@@ -497,7 +509,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
       if (!isValidPriority(priority))
         return Promise.resolve({
           success: false,
-          error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}`,
+          error: PRIORITY_ERROR,
         });
       return serialize(() =>
         editAndSync(
@@ -567,7 +579,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
       if (!isValidPriority(values.priority))
         return Promise.resolve({
           success: false,
-          error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}`,
+          error: PRIORITY_ERROR,
         });
       return serialize(() =>
         editAndSync(
@@ -630,12 +642,12 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
 
     linkPmSession,
 
-    openSession(folder, projectId) {
+    openSession(folder, projectId, start = {}) {
       // A second click while the first one still creates the session waits for it.
       const key = `${projectId}\n${folder}`;
       const running = opening.get(key);
       if (running) return running;
-      const started = openSession(folder, projectId).finally(() => opening.delete(key));
+      const started = openSession(folder, projectId, start).finally(() => opening.delete(key));
       opening.set(key, started);
       return started;
     },

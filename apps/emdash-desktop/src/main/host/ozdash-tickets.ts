@@ -19,6 +19,7 @@ import {
   type CreateTicketInput,
   type EditTicketInput,
   type LinkPmSessionInput,
+  type OpenTicketSessionOptions,
 } from '@core/features/ozdash/api/tickets';
 import { linkTicketTask } from '@core/features/ozdash/node/link-ticket-task';
 import {
@@ -107,6 +108,14 @@ function isEditTicketInput(value: unknown): value is EditTicketInput {
     typeof base.goal === 'string' &&
     (base.priority === null || typeof base.priority === 'number')
   );
+}
+
+/** Missing, or `{ flash?: boolean }` (a new flash ticket starts with its own Log reason). */
+function isOpenSessionOptions(value: unknown): value is OpenTicketSessionOptions | undefined {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== 'object') return false;
+  const flash = (value as Record<string, unknown>).flash;
+  return flash === undefined || typeof flash === 'boolean';
 }
 
 function isLinkPmSessionInput(value: unknown): value is LinkPmSessionInput {
@@ -204,9 +213,9 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       ? service.archive(folder)
       : { success: false, error: 'Invalid ticket folder' }
   );
-  ipcMain.handle(openSession, (_event, folder: unknown, projectId: unknown) =>
-    typeof folder === 'string' && typeof projectId === 'string'
-      ? service.openSession(folder, projectId)
+  ipcMain.handle(openSession, (_event, folder: unknown, projectId: unknown, options: unknown) =>
+    typeof folder === 'string' && typeof projectId === 'string' && isOpenSessionOptions(options)
+      ? service.openSession(folder, projectId, options ?? {})
       : { success: false, error: 'Invalid ticket folder or project' }
   );
   ipcMain.handle(linkTask, (_event, input: unknown) =>

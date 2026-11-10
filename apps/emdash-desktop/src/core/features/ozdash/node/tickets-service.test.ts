@@ -334,7 +334,7 @@ describe('tickets service', () => {
       );
     });
 
-    it('writes the chosen priority; refuses one outside 1-4', async () => {
+    it('writes the chosen priority (0 = flash); refuses one outside 0-4', async () => {
       const service = makeService();
       const result = await service.createTicket({
         title: 'Urgent',
@@ -345,9 +345,49 @@ describe('tickets service', () => {
       expect(result).toMatchObject({ success: true, folder: '1-urgent' });
       expect(read('1-urgent')).toContain('\npriority: 1\n');
       expect(
-        await service.createTicket({ title: 'X', description: '', priority: 0, projectId: 'pm' })
-      ).toEqual({ success: false, error: 'Priority must be 1-4' });
+        await service.createTicket({ title: 'X', description: '', priority: 5, projectId: 'pm' })
+      ).toEqual({ success: false, error: 'Priority must be 0-4 (0 = flash)' });
     });
+
+    it('flash: a P0 ticket, then the Start path makes it active with its PM session', async () => {
+      const createPmSession = vi.fn(async () => ({ success: true as const, taskId: 'pm-flash' }));
+      const service = makeService({ createPmSession });
+      const created = await service.createTicket({
+        title: 'Quick look',
+        description: 'Why is X slow?',
+        priority: 0,
+        projectId: 'pm',
+      });
+      expect(created).toMatchObject({ success: true, folder: '1-quick-look', taskId: null });
+      expect(read('1-quick-look')).toContain('\npriority: 0\n');
+      expect((await readTickets(vault)).tickets[0]!.priority).toBe(0);
+
+      expect(await service.openSession('1-quick-look', 'pm', { flash: true })).toEqual({
+        success: true,
+        projectId: 'pm',
+        taskId: 'pm-flash',
+        created: true,
+      });
+      expect(createPmSession).toHaveBeenCalledWith({
+        projectId: 'pm',
+        name: 'ticket-1-quick-look',
+        prompt: '/oz-pm 1',
+      });
+      const text = read('1-quick-look');
+      expect(text).toContain('status: active\n');
+      expect(text).toContain('pm_session: pm-flash\n');
+      expect(text).toContain('- 2026-11-06 09:05: Started (flash ticket)\n');
+      expect(text).toContain('\npriority: 0\n');
+    });
+  });
+
+  it('Start from the board keeps its own Log reason', async () => {
+    write('9-p', ticketText('9', 'parked'));
+    const service = makeService({
+      createPmSession: async () => ({ success: true as const, taskId: 't9' }),
+    });
+    await service.openSession('9-p', 'pm');
+    expect(read('9-p')).toContain('Started (PM session opened from the OZdash board)\n');
   });
 
   describe('linkPmSession', () => {
@@ -625,12 +665,12 @@ describe('tickets service', () => {
       expect(gitCalls).toEqual(syncCalls);
     });
 
-    it('refuses priorities outside 1-4 and does not write the same value', async () => {
+    it('refuses priorities outside 0-4 and does not write the same value', async () => {
       write('21-a', ticketText('21', 'active'));
       const service = makeService();
-      expect(await service.setPriority('21-a', 0)).toEqual({
+      expect(await service.setPriority('21-a', -1)).toEqual({
         success: false,
-        error: 'Priority must be 1-4',
+        error: 'Priority must be 0-4 (0 = flash)',
       });
       expect(await service.setPriority('21-a', 5)).toMatchObject({ success: false });
       expect(await service.setPriority('21-a', 2.5)).toMatchObject({ success: false });
@@ -731,6 +771,24 @@ describe('tickets service', () => {
       ]);
     });
 
+    it('Flash in Edit only sets priority 0 (no start, no PM session)', async () => {
+      write('64-a', original.replace('id: 60', 'id: 64'));
+      const createPmSession = vi.fn();
+      const service = makeService({ createPmSession });
+      expect(
+        await service.editTicket({
+          folder: '64-a',
+          values: { title: 'Ticket 60', goal: 'Old goal', priority: 0 },
+          base,
+        })
+      ).toEqual({ success: true });
+      const text = read('64-a');
+      expect(text).toContain('priority: 0\nrank:\n');
+      expect(text).toContain('status: active\n');
+      expect(text).toContain('- 2026-11-06 09:05: Edited in OZdash (priority)\n');
+      expect(createPmSession).not.toHaveBeenCalled();
+    });
+
     it('refuses when the file changed since the form opened, and writes nothing', async () => {
       // The ticket check changed the Goal after the form was opened.
       const onDisk = original.replace('Old goal', 'Goal from the PM session');
@@ -777,7 +835,7 @@ describe('tickets service', () => {
       ).toEqual({ success: false, error: 'The title is empty' });
       expect(
         await service.editTicket({ folder: '63-a', values: { ...base, priority: 5 }, base })
-      ).toEqual({ success: false, error: 'Priority must be 1-4' });
+      ).toEqual({ success: false, error: 'Priority must be 0-4 (0 = flash)' });
       expect(gitCalls).toEqual([]);
       expect(await service.editTicket({ folder: '63-a', values: base, base })).toEqual({
         success: true,
