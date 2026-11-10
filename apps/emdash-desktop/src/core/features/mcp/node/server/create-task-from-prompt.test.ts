@@ -110,10 +110,10 @@ describe('createTaskFromPrompt', () => {
     expect(readProviderSettings).not.toHaveBeenCalled();
   });
 
-  it('uses the saved terminal auto-approve preference on the project host', async () => {
+  it('auto-approves by default (fork), even when the saved preference is off', async () => {
     readProviderSettings.mockResolvedValue({
       ...emptyProviderSettings,
-      pty: { version: '1', autoApprove: true },
+      pty: { version: '1', autoApprove: false },
     });
     const createTask = vi.fn(async () => ok({}));
     const deps = dependencies({ createTask });
@@ -362,5 +362,67 @@ describe('createTaskFromPrompt ticket (fork)', () => {
     expect(result.success).toBe(true);
     expect(result.success && result.data.ticket).toBeNull();
     expect(taskTickets.set).not.toHaveBeenCalled();
+  });
+});
+
+describe('createTaskFromPrompt agent presets (fork)', () => {
+  async function created(input: Record<string, unknown>) {
+    const createTask = vi.fn(async () => ok({}));
+    const result = await createTaskFromPrompt(dependencies({ createTask }), {
+      projectId: 'project-1',
+      prompt: 'Review the change',
+      branchName: 'feature/review',
+      ...input,
+    });
+    const params = createTask.mock.calls[0] as unknown as [CreateTaskParams] | undefined;
+    return { result, conversation: params?.[0].taskConfig.initialConversation };
+  }
+
+  it('passes a free-form codex model and the reasoning effort', async () => {
+    const { result, conversation } = await created({
+      provider: 'codex',
+      model: 'gpt-6.1-sol',
+      effort: 'high',
+    });
+    expect(result).toMatchObject({
+      success: true,
+      data: { provider: 'codex', model: 'gpt-6.1-sol', effort: 'high', autoApprove: true },
+    });
+    expect(conversation).toMatchObject({
+      type: 'pty',
+      model: 'gpt-6.1-sol',
+      effort: 'high',
+      autoApprove: true,
+    });
+  });
+
+  it('passes a cursor model that is not in its list, and drops effort for cursor', async () => {
+    const { result, conversation } = await created({
+      provider: 'cursor',
+      model: 'cursor-grok-4.6-low',
+      effort: 'high',
+    });
+    expect(result).toMatchObject({
+      success: true,
+      data: { model: 'cursor-grok-4.6-low', effort: null, autoApprove: true },
+    });
+    expect(conversation).toMatchObject({ model: 'cursor-grok-4.6-low', autoApprove: true });
+    expect(conversation).not.toHaveProperty('effort');
+  });
+
+  it('passes claude effort', async () => {
+    const { conversation } = await created({ provider: 'claude', model: 'opus', effort: 'max' });
+    expect(conversation).toMatchObject({ model: 'opus', effort: 'max', autoApprove: true });
+  });
+
+  it('rejects model ids and efforts that are not one plain CLI argument', async () => {
+    expect((await created({ provider: 'claude', model: 'opus --yolo' })).result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('Invalid model id'),
+    });
+    expect((await created({ provider: 'claude', effort: 'a b' })).result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('Invalid effort'),
+    });
   });
 });

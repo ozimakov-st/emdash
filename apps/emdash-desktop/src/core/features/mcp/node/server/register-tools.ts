@@ -426,10 +426,20 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
           .string()
           .optional()
           .describe(
-            "Model id for the agent; must be one of the provider's selectable models. " +
-              "Defaults to the provider CLI's default model in a terminal, or saved provider " +
-              'settings in chat UI. Chat UI model overrides require a previously discovered ' +
-              'provider model setting'
+            'Model id for the agent, as its CLI accepts it (for example claude "opus", codex ' +
+              '"gpt-6.1-sol", cursor "cursor-grok-4.6-high"). Any id the CLI knows works, not ' +
+              "only the listed ones. Defaults to the provider CLI's default model in a terminal, " +
+              'or saved provider settings in chat UI. Chat UI model overrides require a ' +
+              'previously discovered provider model setting'
+          ),
+        effort: z
+          .string()
+          .optional()
+          .describe(
+            'Reasoning effort for the agent in terminal mode, for example "high". claude: ' +
+              '--effort (low, medium, high, xhigh, max); codex: -c model_reasoning_effort ' +
+              '(minimal, low, medium, high, xhigh). Ignored for chat UI and other providers; ' +
+              'the response reports the value that was applied (null when dropped)'
           ),
         branchName: z
           .string()
@@ -456,9 +466,9 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
           .optional()
           .describe(
             'Run the agent with permission prompts skipped, so it executes commands and edits ' +
-              "without asking in terminal mode. Defaults to the provider's saved terminal setting, " +
-              'and is ignored for chat UI and providers without an auto-approve mode. The response reports the ' +
-              'value that was applied'
+              'without asking in terminal mode. Defaults to true in OZdash (pass false to get ' +
+              'permission prompts), and is ignored for chat UI and providers without an ' +
+              'auto-approve mode. The response reports the value that was applied'
           ),
         ticket: ticketInputSchema
           .optional()

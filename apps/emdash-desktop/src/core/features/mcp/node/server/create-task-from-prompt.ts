@@ -29,9 +29,12 @@ export type McpCreateTaskInput = {
   name?: string;
   provider?: string;
   model?: string;
+  /** Fork (ozimakov-st): reasoning effort for terminal agents with an effort flag. */
+  effort?: string;
   branchName?: string;
   baseBranch?: string;
   chatUi?: boolean;
+  /** Fork (ozimakov-st): defaults to true (no permission prompts), not the saved setting. */
   autoApprove?: boolean;
   /** Fork (ozimakov-st): the ticket whose PM session controls this task. */
   ticket?: unknown;
@@ -47,6 +50,11 @@ export type McpCreateTaskResult = {
    */
   provider: AgentProviderId | null;
   model: string | null;
+  /**
+   * Fork (ozimakov-st): the reasoning effort passed to the agent CLI. Null when none was
+   * asked for, or when it was dropped (chat UI, or a provider without effort support).
+   */
+  effort: string | null;
   conversationType: 'pty' | 'acp' | 'none';
   /**
    * Null when no conversation is started. False when the caller asked for
@@ -100,7 +108,7 @@ async function resolveLaunchSettings(
     return ok({
       autoApprove:
         getPlugin(provider).capabilities.autoApprove.kind === 'supported' &&
-        (input.autoApprove ?? settings.pty.autoApprove),
+        (input.autoApprove ?? MCP_DEFAULT_AUTO_APPROVE),
     });
   }
 
@@ -121,6 +129,15 @@ async function resolveLaunchSettings(
   return ok({ autoApprove: false, options });
 }
 
+/**
+ * Fork (ozimakov-st): MCP tasks run without permission prompts unless the caller passes
+ * `autoApprove: false` (Oleg's personal fork; upstream uses the saved terminal setting).
+ */
+export const MCP_DEFAULT_AUTO_APPROVE = true;
+
+/** A model id or effort level that is safe to pass as one CLI argument. */
+const CLI_VALUE_PATTERN = /^[\w.:\-[\]=,/]{1,100}$/;
+
 export function resolveModel(
   provider: AgentProviderId,
   requested: string | undefined
@@ -131,11 +148,24 @@ export function resolveModel(
   if (models.kind !== 'selectable') {
     return err(`Provider "${provider}" does not support model selection`);
   }
-  if (!Object.hasOwn(models.modelOptions, model)) {
-    const valid = Object.keys(models.modelOptions).join(', ');
-    return err(`Unknown model "${model}" for provider "${provider}". Valid models: ${valid}`);
-  }
+  // Fork (ozimakov-st): free-form ids. The listed models are only suggestions: agent CLIs
+  // ship new models before Emdash lists them, so the CLI validates the id.
+  if (!CLI_VALUE_PATTERN.test(model)) return err(`Invalid model id "${model}"`);
   return ok(model);
+}
+
+/**
+ * Fork (ozimakov-st): the effort to pass, or undefined. Providers without effort support
+ * (and chat UI) drop it; the response then reports `effort: null`.
+ */
+export function resolveEffort(
+  provider: AgentProviderId,
+  requested: string | undefined
+): Result<string | undefined, string> {
+  const effort = requested?.trim();
+  if (!effort) return ok(undefined);
+  if (!CLI_VALUE_PATTERN.test(effort)) return err(`Invalid effort "${effort}"`);
+  return getPlugin(provider).capabilities.effort.kind === 'selectable' ? ok(effort) : ok(undefined);
 }
 
 async function resolveBranchName(
@@ -185,6 +215,7 @@ export async function createTaskFromPrompt(
   // resolving (and validating) them for a promptless task.
   let provider: AgentProviderId | null = null;
   let model: string | undefined;
+  let effort: string | undefined;
   if (prompt) {
     const resolvedProvider = await resolveProvider(appSettings, input.provider);
     if (!resolvedProvider.success) return resolvedProvider;
@@ -193,6 +224,10 @@ export async function createTaskFromPrompt(
     const resolvedModel = resolveModel(provider, input.model);
     if (!resolvedModel.success) return resolvedModel;
     model = resolvedModel.data;
+
+    const resolvedEffort = resolveEffort(provider, input.effort);
+    if (!resolvedEffort.success) return resolvedEffort;
+    effort = resolvedEffort.data;
   }
 
   const taskName = input.name?.trim() || generateRandom();
@@ -263,6 +298,7 @@ export async function createTaskFromPrompt(
           conversationId,
           provider,
           model,
+          effort,
           prompt,
           conversationType,
           autoApprove,
@@ -320,6 +356,7 @@ export async function createTaskFromPrompt(
     branchName,
     provider,
     model: model ?? null,
+    effort: conversationType === 'pty' ? (effort ?? null) : null,
     conversationType,
     autoApprove,
     workspacePath: created.data.path,
@@ -344,6 +381,7 @@ function buildTaskConfig(options: {
   conversationId: string;
   provider: AgentProviderId | null;
   model: string | undefined;
+  effort: string | undefined;
   prompt: string;
   conversationType: 'pty' | 'acp' | 'none';
   autoApprove: boolean | null;
@@ -366,6 +404,7 @@ function buildTaskConfig(options: {
         : {
             ...(options.autoApprove !== null && { autoApprove: options.autoApprove }),
             ...(options.model && { model: options.model }),
+            ...(options.effort && { effort: options.effort }),
             initialPrompt: prompt,
           }),
     },
