@@ -16,7 +16,7 @@ The PM project opens on a **Tickets** board (code in
 updates when the files change. Columns: Needs Oleg, Active, Waiting. **Parked** and
 **Archive** are toggle panels on the right (open/closed is remembered; a search shows
 matching rows even in a closed panel). Click a card or a parked row to open the ticket
-popup: priority ▲/▼, the Goal with Show more, and actions (card: Park, Open session,
+popup: priority ▲/▼, **Edit**, the Goal with Show more, and actions (card: Park, Open session,
 which opens the PM session or starts one with `/oz-pm <id>`). A parked row has Start and Archive (-> dropped); an
 archived row has Restore (-> parked). Each write changes the ticket and then syncs the
 vault repo (add, commit, pull --rebase --autostash, push).
@@ -30,6 +30,11 @@ generates missing `icon.svg` files in the background with the Claude CLI (haiku,
 tools, one at a time); turn this off with `OZDASH_TICKET_ICONS=off`.
 A task that is a ticket's PM session or child task gets a **Ticket** toggle in its
 titlebar (next to Changes / Files / Conversations): a right sidebar tab with the ticket.
+**Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
+(title, Goal, priority). Save rewrites only the changed fields in place (a new priority
+clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and
+syncs once. The folder keeps its name. If the title, Goal or priority changed on disk
+since the form opened, Save shows an error and writes nothing.
 
 Lifecycle: a ticket becomes `active` (Log `Started (<reason>)`) as soon as it gets a
 session: Start / card open, a linked PM session, or a child task (OZ Tickets, "New
@@ -37,7 +42,8 @@ task…", MCP `create_task` with `ticket`). Waiting and blocked tickets stay as 
 A legacy `status: draft` reads as `parked`.
 
 In the PM project, "new task" (sidebar "+", ⌘N, the board, the task list) is
-**New ticket**: it writes `vault/tickets/<id>-<slug>/ticket.md` (parked, no PM session)
+**New ticket** (title, description, priority P1-P4, default P3): it writes
+`vault/tickets/<id>-<slug>/ticket.md` (parked, no PM session)
 and syncs once. A PM task that no ticket points to shows "no ticket"; its header chip
 can link it to a ticket or create a ticket for it (that ticket is active).
 
