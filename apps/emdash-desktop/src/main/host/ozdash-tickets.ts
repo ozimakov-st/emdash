@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import type { Logger } from '@emdash/shared/logger';
 import { and, eq, isNull } from 'drizzle-orm';
 import { BrowserWindow, ipcMain } from 'electron';
+import { isValidProviderId } from '@core/features/agents/api/node/plugin-registry';
 import { createTaskFromPrompt } from '@core/features/mcp/node/server/create-task-from-prompt';
 import type {
   McpTicketTaskCreated,
@@ -21,6 +22,7 @@ import {
   type LinkPmSessionInput,
   type OpenTicketSessionOptions,
 } from '@core/features/ozdash/api/tickets';
+import { readAgentPalette, resolvePmSessionLaunch } from '@core/features/ozdash/node/agent-palette';
 import { linkTicketTask } from '@core/features/ozdash/node/link-ticket-task';
 import {
   claudeIconRunner,
@@ -135,12 +137,10 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     vaultPath: vaultPath(),
     logger,
     createPmSession: async ({ projectId, name, prompt }) => {
-      const created = await createTaskFromPrompt(mcp, {
-        projectId,
-        name,
-        prompt,
-        provider: 'claude',
-      });
+      // The palette's `pm` row (vault context/agents.md), else claude + opus; auto-approve.
+      const { warning, ...launch } = await resolvePmSessionLaunch(vaultPath(), isValidProviderId);
+      if (warning) logger.warn(`ozdash tickets: ${warning}`);
+      const created = await createTaskFromPrompt(mcp, { projectId, name, prompt, ...launch });
       if (!created.success) return created;
       return {
         success: true,
@@ -200,6 +200,7 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     reorder,
     park,
     edit,
+    agentPresets,
     changed,
   } = OZDASH_TICKETS_CHANNELS;
   ipcMain.handle(list, () => service.list());
@@ -282,6 +283,7 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       ? service.editTicket(input)
       : { success: false, error: 'Invalid ticket edit' }
   );
+  ipcMain.handle(agentPresets, () => readAgentPalette(service.vaultPath));
   // Pixel icons for tickets without `icon.svg` (background, one at a time).
   const icons = ticketIconsEnabled(process.env)
     ? createIconGenerator({
@@ -318,5 +320,6 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     ipcMain.removeHandler(reorder);
     ipcMain.removeHandler(park);
     ipcMain.removeHandler(edit);
+    ipcMain.removeHandler(agentPresets);
   };
 }

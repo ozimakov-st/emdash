@@ -1,6 +1,7 @@
 // Fork (ozimakov-st): Oleg's tickets (PM-managed work items) as the Tickets board
 // shows them. The main process reads them from the vault
 // (`~/Projects/work/vault/tickets/<id>-<slug>/ticket.md`); see ozdash/node.
+import type { AgentPreset } from './agent-palette';
 import type { LinkTicketTaskInput, LinkTicketTaskResult } from './ticket-issues';
 
 export const TICKET_STATUSES = [
@@ -151,6 +152,8 @@ export const OZDASH_TICKETS_CHANNELS = {
   reorder: 'ozdash:reorder-tickets',
   park: 'ozdash:park-ticket',
   edit: 'ozdash:edit-ticket',
+  /** The agent palette (see agent-palette.ts). */
+  agentPresets: 'ozdash:list-agent-presets',
   changed: 'ozdash:tickets-changed',
 } as const;
 
@@ -178,6 +181,8 @@ export type OzdashTicketsBridge = {
   parkTicket(folder: string): Promise<TicketActionResult>;
   /** Rewrites the title, Goal and priority in place (see EditTicketInput). */
   editTicket(input: EditTicketInput): Promise<TicketActionResult>;
+  /** The agent palette's presets (empty when the file is missing). */
+  listAgentPresets(): Promise<AgentPreset[]>;
 };
 
 export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'parked' | 'archive';
