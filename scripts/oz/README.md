@@ -47,6 +47,14 @@ In the PM project, "new task" (sidebar "+", ⌘N, the board, the task list) is
 and syncs once. A PM task that no ticket points to shows "no ticket"; its header chip
 can link it to a ticket or create a ticket for it (that ticket is active).
 
+**⚡ Flash** (a toggle in New / Edit ticket) is for urgent, short work (a quick
+investigation or a quick build). It saves `priority: 0` (P0, sorted above P1) and dims
+the P1-P4 picker. A new flash ticket starts at once: the same path as Start (active, PM
+session `/oz-pm <id>`, Log `Started (flash ticket)`), then OZdash opens the session. In
+Edit, Flash only changes the priority (no start). P0 cards, rows and the Ticket panel are
+gold (`#F5C451`) with a soft glow and a `⚡ P0` chip. In the popup, ▲ stops at P1 and ▼
+from P0 goes to P1.
+
 - Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
