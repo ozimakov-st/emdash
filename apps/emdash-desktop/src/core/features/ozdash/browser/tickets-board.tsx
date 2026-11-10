@@ -37,7 +37,6 @@ import {
   Plus,
   RotateCcw,
 } from 'lucide-react';
-import { when } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import {
   useEffect,
@@ -50,13 +49,14 @@ import {
 } from 'react';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
-import { priorityCardStyle } from '@core/features/ozdash/api/priority-palette';
+import { flashRowStyle, priorityCardStyle } from '@core/features/ozdash/api/priority-palette';
 import { newTicketSessionModalProps } from '@core/features/ozdash/api/ticket-issues';
 import {
   canPark,
   effectivePriority,
   goalPreview,
   groupTickets,
+  isFlashPriority,
   panelView,
   relativeUpdated,
   reorderGroup,
@@ -76,8 +76,6 @@ import {
   asAvailableProject,
   getProjectManagerStore,
 } from '@core/features/projects/api/browser/stores/project-selectors';
-import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
-import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { useOpenModal } from '@core/manifests/browser/modal-api';
 import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useMemento } from '@core/primitives/mementos/react';
@@ -85,13 +83,11 @@ import { useNavigate } from '@core/primitives/navigation/browser/navigation-hook
 import { cn } from '@core/primitives/styling/browser/cn';
 import { ExpandableText } from './expandable-text';
 import { EditTicketDialog } from './new-ticket-form';
+import { navigateToTicketTask } from './open-ticket-task';
 import { PriorityChip, PriorityControl, stopEvent } from './priority-control';
 import { TicketIcon } from './ticket-icon';
 
 type Notice = { tone: 'error' | 'warning'; text: string };
-
-/** How long to wait for a new task to reach the renderer's task list. */
-const NEW_TASK_TIMEOUT_MS = 20_000;
 
 export const TicketsBoard = observer(function TicketsBoard({ projectId }: { projectId: string }) {
   const { navigate } = useNavigate();
@@ -144,11 +140,7 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
         return;
       }
       if (result.warning) setNotice({ tone: 'warning', text: result.warning });
-      // A new task reaches the renderer's task list a moment after it is created.
-      await when(() => !!getTaskManagerStore(result.projectId)?.tasks.has(result.taskId), {
-        timeout: NEW_TASK_TIMEOUT_MS,
-      }).catch(() => undefined);
-      navigate(taskViewDef({ projectId: result.projectId, taskId: result.taskId }));
+      await navigateToTicketTask(navigate, result);
     } finally {
       setBusy(null);
     }
@@ -772,6 +764,9 @@ function RowSummary({ ticket, busy }: { ticket: TicketSummary; busy: boolean }) 
 
 const ROW_CLASS =
   'group flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors hover:bg-background-2';
+/** A flash ticket's row is tinted gold (see flashRowStyle). */
+const rowStyle = (ticket: TicketSummary) =>
+  isFlashPriority(ticket.priority) ? flashRowStyle() : undefined;
 const ROW_ACTION_CLASS =
   'hidden size-5 shrink-0 items-center justify-center rounded text-foreground-passive group-hover:flex group-focus-within:flex hover:bg-background-3 hover:text-foreground disabled:opacity-50';
 
@@ -810,6 +805,7 @@ function ParkedRow({
             setConfirming(true);
           }
         }}
+        style={rowStyle(ticket)}
         className={cn(ROW_CLASS, 'cursor-pointer', busy && 'opacity-60')}
       >
         <RowSummary ticket={ticket} busy={busy} />
@@ -891,6 +887,7 @@ function ArchivedRow({
 }) {
   return (
     <div
+      style={rowStyle(ticket)}
       className={cn(ROW_CLASS, busy && 'opacity-60')}
       title={`${ticket.status}: ${ticket.title}`}
     >

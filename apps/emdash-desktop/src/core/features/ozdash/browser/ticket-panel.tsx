@@ -11,6 +11,7 @@ import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { priorityColor } from '@core/features/ozdash/api/priority-palette';
 import {
+  isFlashPriority,
   relativeUpdated,
   ticketForTask,
   type TicketSummary,
@@ -115,6 +116,10 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
           backgroundColor: `color-mix(in srgb, ${accent} 8%, var(--color-background))`,
           borderBottomColor: `color-mix(in srgb, ${accent} 30%, var(--color-border))`,
           borderLeftColor: accent,
+          // A flash ticket (P0) glows a little inside the header.
+          ...(isFlashPriority(ticket.priority) && {
+            boxShadow: `inset 0 0 18px -8px ${accent}`,
+          }),
         }}
       >
         <div className="flex items-center gap-1.5">
