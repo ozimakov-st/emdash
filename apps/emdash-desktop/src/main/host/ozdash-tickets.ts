@@ -17,6 +17,7 @@ import type { LinkTicketTaskInput } from '@core/features/ozdash/api/ticket-issue
 import {
   OZDASH_TICKETS_CHANNELS,
   type CreateTicketInput,
+  type EditTicketInput,
   type LinkPmSessionInput,
 } from '@core/features/ozdash/api/tickets';
 import { linkTicketTask } from '@core/features/ozdash/node/link-ticket-task';
@@ -77,12 +78,34 @@ function isCreateTicketInput(value: unknown): value is CreateTicketInput {
     isShortString(input.title, MAX_TITLE) &&
     typeof input.description === 'string' &&
     input.description.length <= MAX_DESCRIPTION &&
+    (input.priority === undefined || typeof input.priority === 'number') &&
     isShortString(input.projectId, 200) &&
     (task === undefined ||
       (!!task &&
         typeof task === 'object' &&
         isShortString(task.id, 64) &&
         typeof task.name === 'string'))
+  );
+}
+
+function isEditTicketInput(value: unknown): value is EditTicketInput {
+  if (!value || typeof value !== 'object') return false;
+  const input = value as Record<string, unknown>;
+  const values = input.values as Record<string, unknown> | null | undefined;
+  const base = input.base as Record<string, unknown> | null | undefined;
+  return (
+    isShortString(input.folder, 200) &&
+    !!values &&
+    typeof values === 'object' &&
+    isShortString(values.title, MAX_TITLE) &&
+    typeof values.goal === 'string' &&
+    values.goal.length <= MAX_DESCRIPTION &&
+    typeof values.priority === 'number' &&
+    !!base &&
+    typeof base === 'object' &&
+    typeof base.title === 'string' &&
+    typeof base.goal === 'string' &&
+    (base.priority === null || typeof base.priority === 'number')
   );
 }
 
@@ -167,6 +190,7 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     setPriority,
     reorder,
     park,
+    edit,
     changed,
   } = OZDASH_TICKETS_CHANNELS;
   ipcMain.handle(list, () => service.list());
@@ -244,6 +268,11 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
       ? service.park(folder)
       : { success: false, error: 'Invalid ticket folder' }
   );
+  ipcMain.handle(edit, (_event, input: unknown) =>
+    isEditTicketInput(input)
+      ? service.editTicket(input)
+      : { success: false, error: 'Invalid ticket edit' }
+  );
   // Pixel icons for tickets without `icon.svg` (background, one at a time).
   const icons = ticketIconsEnabled(process.env)
     ? createIconGenerator({
@@ -279,5 +308,6 @@ export function registerOzdashTickets(mcp: McpToolDependencies, logger: Logger):
     ipcMain.removeHandler(setPriority);
     ipcMain.removeHandler(reorder);
     ipcMain.removeHandler(park);
+    ipcMain.removeHandler(edit);
   };
 }

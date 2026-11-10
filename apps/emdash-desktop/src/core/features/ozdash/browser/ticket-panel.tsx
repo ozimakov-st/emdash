@@ -3,9 +3,9 @@
 // child task (ticket marker). The "Ticket" toggle in the task titlebar opens it; the
 // sidebar remembers it per task like the other tabs. Follows the ticket file live.
 import { Alert, Button, ToggleGroup, Tooltip } from '@emdash/ui/react/primitives';
-import { Bot, CircleHelp, Hourglass, KanbanSquare, Ticket } from 'lucide-react';
+import { Bot, CircleHelp, Hourglass, KanbanSquare, Pencil, Ticket } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTaskTicketInfo } from '@core/features/mcp/api/browser/ozdash-task-tickets';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
@@ -21,6 +21,7 @@ import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state
 import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
+import { EditTicketDialog } from './new-ticket-form';
 import { PriorityChip } from './priority-control';
 import { TicketIcon } from './ticket-icon';
 
@@ -80,6 +81,7 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
 }) {
   const { navigate } = useNavigate();
   const found = useTaskTicket(taskId);
+  const [editing, setEditing] = useState(false);
   if (!found) {
     return <p className="p-3 text-xs text-foreground-passive">This task has no ticket.</p>;
   }
@@ -134,38 +136,47 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
           {ticket.needsOleg && ticket.status !== 'blocked' ? ' · needs Oleg' : ''}
           {role === 'child' && <span className="text-foreground-passive"> · child task</span>}
         </div>
-        {(pmId || pmSession) && (
-          <div className="flex flex-wrap gap-1">
-            {pmId && (
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                title="Open the Tickets board"
-                onClick={() => {
-                  ticketsStore.setBoardSelected(true);
-                  navigate(projectViewDef({ projectId: pmId }));
-                }}
-              >
-                <KanbanSquare className="size-3.5" />
-                Board
-              </Button>
-            )}
-            {pmSession && (
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                title="Open the ticket's PM session"
-                onClick={() => navigate(taskViewDef(pmSession))}
-              >
-                <Bot className="size-3.5" />
-                PM session
-              </Button>
-            )}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-1">
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            title="Edit the title, Goal and priority"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="size-3.5" />
+            Edit
+          </Button>
+          {pmId && (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              title="Open the Tickets board"
+              onClick={() => {
+                ticketsStore.setBoardSelected(true);
+                navigate(projectViewDef({ projectId: pmId }));
+              }}
+            >
+              <KanbanSquare className="size-3.5" />
+              Board
+            </Button>
+          )}
+          {pmSession && (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              title="Open the ticket's PM session"
+              onClick={() => navigate(taskViewDef(pmSession))}
+            >
+              <Bot className="size-3.5" />
+              PM session
+            </Button>
+          )}
+        </div>
       </div>
+      <EditTicketDialog ticket={ticket} open={editing} onOpenChange={setEditing} />
       {ticketsStore.notice && (
         <div className="px-3 pt-3">
           <Alert.Root

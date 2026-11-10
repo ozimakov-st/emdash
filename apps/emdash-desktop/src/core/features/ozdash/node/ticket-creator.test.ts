@@ -3,10 +3,12 @@ import {
   addSectionText,
   cleanTitle,
   DEFAULT_TICKET_TEMPLATE,
+  editTicketContent,
   linkPmSessionContent,
   newTicketContent,
   nextTicketId,
   quoteYamlString,
+  replaceSectionText,
   ticketFolderName,
 } from './ticket-creator';
 import { parseTicket } from './ticket-parser';
@@ -141,6 +143,13 @@ describe('newTicketContent', () => {
     );
   });
 
+  it('writes the chosen priority (default P3)', () => {
+    const result = newTicketContent(null, { ...input, priority: 1 });
+    expect(result.success && result.content).toContain('\npriority: 1\n');
+    const parsed = result.success ? parseTicket(result.content, '5-x') : null;
+    expect(parsed?.success && parsed.ticket.priority).toBe(1);
+  });
+
   it('adds a Goal section when the template has none', () => {
     expect(addSectionText('---\nid: 1\n---\n\n## Log\n', 'Goal', 'Do it')).toEqual({
       success: true,
@@ -174,5 +183,137 @@ describe('linkPmSessionContent', () => {
       '---\nid: 9\nnext_check:\npm_session: t\njira:\nupdated: 2026-11-06\n---\n\n## Log\n' +
         '- 2026-11-06 09:05: PM session name linked in OZdash\n'
     );
+  });
+});
+
+describe('replaceSectionText', () => {
+  it('replaces only the text of the section; blank lines around it stay', () => {
+    const before =
+      '---\nid: 1\n---\n\n## Goal\n\nOld one\n### Sub\nold two\n\n\n## Plan\n- [ ] x\n';
+    expect(replaceSectionText(before, 'Goal', 'New\nlines\n')).toEqual({
+      success: true,
+      content: '---\nid: 1\n---\n\n## Goal\n\nNew\nlines\n\n\n## Plan\n- [ ] x\n',
+    });
+  });
+
+  it('fills an empty section, clears a section, and keeps CRLF', () => {
+    expect(replaceSectionText('---\nid: 1\n---\n\n## Goal\n\n## Log\n', 'Goal', 'Do it')).toEqual({
+      success: true,
+      content: '---\nid: 1\n---\n\n## Goal\nDo it\n\n## Log\n',
+    });
+    expect(
+      replaceSectionText('---\r\nid: 1\r\n---\r\n## Goal\r\nold\r\n\r\n## Log\r\n', 'Goal', '  ')
+    ).toEqual({ success: true, content: '---\r\nid: 1\r\n---\r\n## Goal\r\n\r\n## Log\r\n' });
+    expect(replaceSectionText('---\r\nid: 1\r\n---\r\n## Goal\r\nold\r\n', 'Goal', 'a\nb')).toEqual(
+      { success: true, content: '---\r\nid: 1\r\n---\r\n## Goal\r\na\r\nb\r\n' }
+    );
+  });
+
+  it('adds the section after the frontmatter when missing', () => {
+    expect(replaceSectionText('---\nid: 1\n---\n\n## Log\n', 'Goal', 'Do it')).toEqual({
+      success: true,
+      content: '---\nid: 1\n---\n\n## Goal\nDo it\n\n## Log\n',
+    });
+  });
+});
+
+describe('editTicketContent', () => {
+  const before = [
+    '---',
+    'id: 7',
+    'title: "Old title"',
+    'status: waiting',
+    'priority: 2  # P2',
+    'rank: 20',
+    'needs_oleg: yes',
+    'pm_session: task-7',
+    'owner: someone',
+    'updated: 2026-10-02',
+    '---',
+    '',
+    '## Goal',
+    'Old goal',
+    'second line',
+    '',
+    '## Requirements',
+    '- keep me',
+    '',
+    '## Questions for Oleg',
+    '- [ ] Q1?',
+    '',
+    '## Log',
+    '- 2026-10-01 10:00: Created.',
+    '',
+    '## Notes',
+    'trailing section',
+    '',
+  ].join('\n');
+  const parsed = parseTicket(before, '7-old-title');
+  if (!parsed.success) throw new Error(parsed.error);
+  const ticket = parsed.ticket;
+
+  it('changes only the edited fields, clears rank on a new priority, logs the fields', () => {
+    const result = editTicketContent(
+      before,
+      ticket,
+      { title: '  New "title" ', goal: 'New goal\r\n', priority: 1 },
+      NOW
+    );
+    expect(result).toEqual({
+      success: true,
+      content: before
+        .replace('title: "Old title"', 'title: "New \\"title\\""')
+        .replace('priority: 2  # P2', 'priority: 1  # P2')
+        .replace('rank: 20', 'rank:')
+        .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+        .replace('Old goal\nsecond line', 'New goal')
+        .replace(
+          '- 2026-10-01 10:00: Created.\n',
+          '- 2026-10-01 10:00: Created.\n- 2026-11-06 09:05: Edited in OZdash (title, goal, priority)\n'
+        ),
+    });
+  });
+
+  it('keeps rank when the priority is the same; logs only what changed', () => {
+    const result = editTicketContent(
+      before,
+      ticket,
+      { title: 'Old title', goal: 'Old goal\nsecond line', priority: 2 },
+      NOW
+    );
+    expect(result).toEqual({ success: true, content: before }); // Nothing changed.
+    const goalOnly = editTicketContent(
+      before,
+      ticket,
+      { title: 'Old title', goal: '', priority: 2 },
+      NOW
+    );
+    if (!goalOnly.success) throw new Error(goalOnly.error);
+    expect(goalOnly.content).toContain('\nrank: 20\n');
+    expect(goalOnly.content).toContain('\n## Goal\n\n## Requirements\n');
+    expect(goalOnly.content).toContain(': Edited in OZdash (goal)\n');
+    const reparsed = parseTicket(goalOnly.content, '7-old-title');
+    expect(reparsed.success && reparsed.ticket).toMatchObject({
+      title: 'Old title',
+      goal: null,
+      priority: 2,
+      rank: 20,
+      status: 'waiting',
+      needsOleg: true,
+      pmSession: 'task-7',
+    });
+  });
+
+  it('treats a missing priority as P3', () => {
+    const noPriority = '---\nid: 8\ntitle: T\nstatus: active\n---\n\n## Goal\ng\n';
+    const found = parseTicket(noPriority, '8-t');
+    if (!found.success) throw new Error(found.error);
+    const same = editTicketContent(
+      noPriority,
+      found.ticket,
+      { title: 'T', goal: 'g', priority: 3 },
+      NOW
+    );
+    expect(same).toEqual({ success: true, content: noPriority });
   });
 });

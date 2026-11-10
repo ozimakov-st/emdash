@@ -8,6 +8,7 @@ import {
   pmTaskHasNoTicket,
   type CreateTicketInput,
   type CreateTicketResult,
+  type EditTicketInput,
   type LinkPmSessionInput,
   type OpenTicketSessionResult,
   type OzdashTicketsBridge,
@@ -224,6 +225,23 @@ export class TicketsStore {
     } finally {
       void this.reload();
     }
+  }
+
+  async editTicket(input: EditTicketInput): Promise<TicketActionResult> {
+    const api = bridge();
+    if (!api?.editTicket) return { success: false, error: 'Not available outside OZdash' };
+    try {
+      return await api.editTicket(input);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      void this.reload();
+    }
+  }
+
+  /** The ticket as the file has it (no ▲/▼ values that are not written yet), or null. */
+  savedTicket(folder: string): TicketSummary | null {
+    return this.list?.tickets.find((ticket) => ticket.folder === folder) ?? null;
   }
 
   async linkPmSession(input: LinkPmSessionInput): Promise<TicketActionResult> {

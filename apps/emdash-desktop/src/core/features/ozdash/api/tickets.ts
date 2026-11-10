@@ -82,10 +82,31 @@ export type CreateTicketInput = {
   title: string;
   /** Goes under `## Goal`; may be empty. */
   description: string;
+  /** 1-4; missing = 3. */
+  priority?: number;
   /** The PM project. */
   projectId: string;
   /** Set to use this existing PM project task as the PM session (no new task). */
   existingTask?: { id: string; name: string };
+};
+
+/** The fields the Edit ticket form changes (the same as the New ticket form). */
+export type EditableTicketFields = {
+  title: string;
+  /** The `## Goal` text; may be empty. */
+  goal: string;
+  /** 1-4. */
+  priority: number;
+};
+
+/**
+ * "Edit ticket": new values, and the values the form was opened with (`base`, from the
+ * file). The save is refused when the file's title, Goal or priority no longer match `base`.
+ */
+export type EditTicketInput = {
+  folder: string;
+  values: EditableTicketFields;
+  base: { title: string; goal: string; priority: number | null };
 };
 
 export type CreateTicketResult =
@@ -120,6 +141,7 @@ export const OZDASH_TICKETS_CHANNELS = {
   setPriority: 'ozdash:set-ticket-priority',
   reorder: 'ozdash:reorder-tickets',
   park: 'ozdash:park-ticket',
+  edit: 'ozdash:edit-ticket',
   changed: 'ozdash:tickets-changed',
 } as const;
 
@@ -141,6 +163,8 @@ export type OzdashTicketsBridge = {
   reorderTickets(folders: string[]): Promise<TicketActionResult>;
   /** A ticket that is not parked or archived -> parked. */
   parkTicket(folder: string): Promise<TicketActionResult>;
+  /** Rewrites the title, Goal and priority in place (see EditTicketInput). */
+  editTicket(input: EditTicketInput): Promise<TicketActionResult>;
 };
 
 export type TicketColumnId = 'needs-oleg' | 'active' | 'waiting' | 'parked' | 'archive';

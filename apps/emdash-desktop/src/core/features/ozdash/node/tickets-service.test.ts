@@ -333,6 +333,21 @@ describe('tickets service', () => {
         { success: false, error: 'The title is empty' }
       );
     });
+
+    it('writes the chosen priority; refuses one outside 1-4', async () => {
+      const service = makeService();
+      const result = await service.createTicket({
+        title: 'Urgent',
+        description: '',
+        priority: 1,
+        projectId: 'pm',
+      });
+      expect(result).toMatchObject({ success: true, folder: '1-urgent' });
+      expect(read('1-urgent')).toContain('\npriority: 1\n');
+      expect(
+        await service.createTicket({ title: 'X', description: '', priority: 0, projectId: 'pm' })
+      ).toEqual({ success: false, error: 'Priority must be 1-4' });
+    });
   });
 
   describe('linkPmSession', () => {
@@ -677,6 +692,98 @@ describe('tickets service', () => {
       });
       expect(await service.park('52-d')).toMatchObject({ success: false });
       expect(read('52-d')).toBe(ticketText('52', 'done'));
+    });
+  });
+
+  describe('editTicket', () => {
+    /** ticketText with a Goal, a rank and an extra key; the Log stays last. */
+    const original = ticketText('60', 'active')
+      .replace('priority: 2\n', 'priority: 2\nrank: 10\nowner: me\n')
+      .replace('\n## Log\n', '\n## Goal\nOld goal\n\n## Plan\n- [ ] step\n\n## Log\n');
+    const base = { title: 'Ticket 60', goal: 'Old goal', priority: 2 };
+
+    it('rewrites the edited fields in place, clears rank, logs, and syncs once', async () => {
+      write('60-a', original);
+      const service = makeService();
+      const result = await service.editTicket({
+        folder: '60-a',
+        values: { title: 'Renamed', goal: 'New goal', priority: 4 },
+        base,
+      });
+      expect(result).toEqual({ success: true });
+      expect(read('60-a')).toBe(
+        original
+          .replace('title: Ticket 60', 'title: "Renamed"')
+          .replace('priority: 2\nrank: 10', 'priority: 4\nrank:')
+          .replace('Old goal', 'New goal')
+          .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+          .concat('- 2026-11-06 09:05: Edited in OZdash (title, goal, priority)\n')
+      );
+      // The folder keeps its name.
+      expect((await service.list()).tickets.map((ticket) => ticket.folder)).toEqual(['60-a']);
+      expect(gitCalls).toEqual([
+        'rev-parse --show-toplevel',
+        'pull --rebase --autostash',
+        'add -- vault',
+        'diff --cached --quiet -- vault',
+        'pull --rebase --autostash',
+        'push',
+      ]);
+    });
+
+    it('refuses when the file changed since the form opened, and writes nothing', async () => {
+      // The ticket check changed the Goal after the form was opened.
+      const onDisk = original.replace('Old goal', 'Goal from the PM session');
+      write('61-a', onDisk.replace('id: 60', 'id: 61'));
+      const service = makeService();
+      const result = await service.editTicket({
+        folder: '61-a',
+        values: { title: 'Ticket 60', goal: 'Mine', priority: 2 },
+        base,
+      });
+      expect(result).toEqual({
+        success: false,
+        error:
+          'Ticket #61 changed on disk since the form was opened (goal). Close the form and open Edit again.',
+      });
+      expect(read('61-a')).toBe(onDisk.replace('id: 60', 'id: 61'));
+      expect(gitCalls).not.toContain('push');
+    });
+
+    it('ignores changes to other parts of the file (a new Log line)', async () => {
+      const withLog = original.concat('- 2026-11-05 08:00: Checked.\n');
+      write('62-a', withLog);
+      const service = makeService();
+      expect(
+        await service.editTicket({
+          folder: '62-a',
+          values: { title: 'Ticket 60', goal: 'Old goal', priority: 1 },
+          base,
+        })
+      ).toEqual({ success: true });
+      expect(read('62-a')).toBe(
+        withLog
+          .replace('priority: 2\nrank: 10', 'priority: 1\nrank:')
+          .replace('updated: 2026-10-02', 'updated: 2026-11-06')
+          .concat('- 2026-11-06 09:05: Edited in OZdash (priority)\n')
+      );
+    });
+
+    it('refuses an empty title or a bad priority; no write without changes', async () => {
+      write('63-a', original);
+      const service = makeService();
+      expect(
+        await service.editTicket({ folder: '63-a', values: { ...base, title: '  ' }, base })
+      ).toEqual({ success: false, error: 'The title is empty' });
+      expect(
+        await service.editTicket({ folder: '63-a', values: { ...base, priority: 5 }, base })
+      ).toEqual({ success: false, error: 'Priority must be 1-4' });
+      expect(gitCalls).toEqual([]);
+      expect(await service.editTicket({ folder: '63-a', values: base, base })).toEqual({
+        success: true,
+      });
+      expect(read('63-a')).toBe(original);
+      expect(gitCalls).not.toContain('push');
     });
   });
 });

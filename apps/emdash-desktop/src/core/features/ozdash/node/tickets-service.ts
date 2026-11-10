@@ -20,6 +20,7 @@ import {
   ticketSessionName,
   type CreateTicketInput,
   type CreateTicketResult,
+  type EditTicketInput,
   type LinkPmSessionInput,
   type OpenTicketSessionResult,
   type TicketActionResult,
@@ -28,7 +29,9 @@ import {
 } from '../api/tickets';
 import {
   cleanTitle,
+  editTicketContent,
   linkPmSessionContent,
+  normalizeGoal,
   newTicketContent,
   nextTicketId,
   ticketFolderName,
@@ -171,10 +174,19 @@ export interface TicketsService {
   reorder(folders: readonly string[]): Promise<TicketActionResult>;
   /** A ticket that is not parked or archived -> parked, with a Log line, then syncs. */
   park(folder: string): Promise<TicketActionResult>;
+  /**
+   * "Edit ticket": rewrites the changed title / Goal / priority in place with a Log line,
+   * then syncs. Refused when the file's values no longer match `input.base`.
+   */
+  editTicket(input: EditTicketInput): Promise<TicketActionResult>;
   /** Commits and pushes the vault now (after other writes), for example new icons. */
   sync(message: string): Promise<TicketActionResult>;
   /** Calls `onChange` with the new list whenever the tickets change. Returns a stop function. */
   watch(onChange: (list: TicketList) => void): () => void;
+}
+
+function isValidPriority(priority: number): boolean {
+  return Number.isInteger(priority) && priority >= MIN_PRIORITY && priority <= MAX_PRIORITY;
 }
 
 function isPlainFolderName(folder: string): boolean {
@@ -265,6 +277,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
   async function writeNewTicket(
     title: string,
     description: string,
+    priority: number | undefined,
     pmSession: string,
     startedBy: string | undefined
   ): Promise<{ success: true; id: string; folder: string } | { success: false; error: string }> {
@@ -291,6 +304,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
         id,
         title,
         description,
+        ...(priority !== undefined && { priority }),
         pmSession,
         ...(startedBy && { startedBy }),
         now: now(),
@@ -313,6 +327,8 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
   async function createTicket(input: CreateTicketInput): Promise<CreateTicketResult> {
     const title = cleanTitle(input.title);
     if (!title) return { success: false, error: 'The title is empty' };
+    if (input.priority !== undefined && !isValidPriority(input.priority))
+      return { success: false, error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}` };
     const { projectId, existingTask } = input;
     if (existingTask && !(await options.pmSessionExists(existingTask.id, projectId)))
       return { success: false, error: 'The task is not in the PM project' };
@@ -322,6 +338,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
       writeNewTicket(
         title,
         input.description,
+        input.priority,
         existingTask?.id ?? '',
         existingTask && `PM session ${existingTask.name} linked in OZdash`
       )
@@ -477,7 +494,7 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     list: () => readTickets(vaultPath),
 
     setPriority(folder, priority) {
-      if (!Number.isInteger(priority) || priority < MIN_PRIORITY || priority > MAX_PRIORITY)
+      if (!isValidPriority(priority))
         return Promise.resolve({
           success: false,
           error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}`,
@@ -543,6 +560,37 @@ export function createTicketsService(options: TicketsServiceOptions): TicketsSer
     },
 
     findTicket,
+
+    editTicket({ folder, values, base }) {
+      if (!cleanTitle(values.title))
+        return Promise.resolve({ success: false, error: 'The title is empty' });
+      if (!isValidPriority(values.priority))
+        return Promise.resolve({
+          success: false,
+          error: `Priority must be ${MIN_PRIORITY}-${MAX_PRIORITY}`,
+        });
+      return serialize(() =>
+        editAndSync(
+          folder,
+          (content, ticket) => {
+            // Someone (a PM session, the ticket check, ▲/▼) changed these since the
+            // form opened: do not overwrite their change.
+            const changed = [
+              ticket.title !== base.title && 'title',
+              (ticket.goal ?? '') !== normalizeGoal(base.goal) && 'goal',
+              ticket.priority !== base.priority && 'priority',
+            ].filter((field): field is string => !!field);
+            if (changed.length > 0)
+              return {
+                success: false,
+                error: `Ticket #${ticket.id} changed on disk since the form was opened (${changed.join(', ')}). Close the form and open Edit again.`,
+              };
+            return editTicketContent(content, ticket, values, now());
+          },
+          (ticket) => `tickets: edit #${ticket.id} (OZdash)`
+        )
+      );
+    },
 
     linkChildTask(folder, link) {
       return serialize(() =>

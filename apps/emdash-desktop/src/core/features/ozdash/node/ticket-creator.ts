@@ -1,6 +1,12 @@
 // Fork (ozimakov-st): new vault tickets from OZdash ("New ticket" in the PM project,
-// "Create ticket from this task"). Pure; no file access.
-import { ticketSlug } from '../api/tickets';
+// "Create ticket from this task") and "Edit ticket". Pure; no file access.
+import {
+  DEFAULT_PRIORITY,
+  effectivePriority,
+  ticketSlug,
+  type EditableTicketFields,
+  type TicketSummary,
+} from '../api/tickets';
 import {
   appendLogLine,
   chain,
@@ -96,6 +102,8 @@ export type NewTicketInput = {
   title: string;
   /** Goes under `## Goal`; may be empty. */
   description: string;
+  /** 1-4; missing = 3. */
+  priority?: number;
   /** The PM session task id, or empty. */
   pmSession: string;
   /**
@@ -113,7 +121,7 @@ export function newTicketContent(template: string | null, input: NewTicketInput)
     (text) => setFrontmatterValue(text, 'id', String(input.id)),
     (text) => setFrontmatterValue(text, 'title', quoteYamlString(input.title)),
     (text) => setFrontmatterValue(text, 'status', input.startedBy ? 'active' : 'parked'),
-    (text) => setFrontmatterValue(text, 'priority', '3'),
+    (text) => setFrontmatterValue(text, 'priority', String(input.priority ?? DEFAULT_PRIORITY)),
     (text) => setFrontmatterValue(text, 'needs_oleg', 'no'),
     (text) => setFrontmatterValue(text, 'next_check', ''),
     (text) => setFrontmatterValue(text, 'pm_session', input.pmSession),
@@ -142,4 +150,82 @@ export function linkPmSessionContent(
     (text) =>
       appendLogLine(text, `- ${formatDateTime(now)}: PM session ${taskName} linked in OZdash`),
   ]);
+}
+
+/** Goal text as the parser reads it: `\n` line breaks, no blank lines or spaces around it. */
+export function normalizeGoal(text: string): string {
+  return text.replace(/\r\n?/g, '\n').trim();
+}
+
+/**
+ * Replaces the text of the `## <name>` section with `text` (empty clears it). Blank
+ * lines around the old text and every other line stay. Adds the section when missing.
+ */
+export function replaceSectionText(content: string, name: string, text: string): EditResult {
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  const body = normalizeGoal(text).replace(/\n/g, eol);
+  const lines = content.split(eol);
+  const heading = new RegExp(`^##\\s+${name}\\s*$`, 'i');
+  const index = lines.findIndex((line) => heading.test(line));
+  if (index < 0) return addSectionText(content, name, body);
+  let end = lines.length;
+  for (let at = index + 1; at < lines.length; at += 1) {
+    if (/^#{1,2}\s/.test(lines[at]!)) {
+      end = at;
+      break;
+    }
+  }
+  let first = -1;
+  let last = -1;
+  for (let at = index + 1; at < end; at += 1) {
+    if (lines[at]!.trim() === '') continue;
+    if (first < 0) first = at;
+    last = at;
+  }
+  if (first < 0) return addSectionText(content, name, body); // Empty section.
+  lines.splice(first, last - first + 1, ...(body ? body.split(eol) : []));
+  return { success: true, content: lines.join(eol) };
+}
+
+export type EditedField = 'title' | 'goal' | 'priority';
+
+/** The fields whose new value differs from the ticket (title cleaned, Goal normalized). */
+export function editedFields(
+  ticket: Pick<TicketSummary, 'title' | 'goal' | 'priority'>,
+  values: EditableTicketFields
+): EditedField[] {
+  const fields: EditedField[] = [];
+  if (cleanTitle(values.title) !== ticket.title) fields.push('title');
+  if (normalizeGoal(values.goal) !== (ticket.goal ?? '')) fields.push('goal');
+  if (values.priority !== effectivePriority(ticket.priority)) fields.push('priority');
+  return fields;
+}
+
+/**
+ * "Edit ticket": rewrites only the changed fields in place (`title:`, the `## Goal` text,
+ * `priority:`; a `rank:` is cleared when the priority changes, as with ▲/▼), today's
+ * `updated:`, and the Log line `Edited in OZdash (<fields>)`. No change = same content.
+ */
+export function editTicketContent(
+  content: string,
+  ticket: Pick<TicketSummary, 'title' | 'goal' | 'priority' | 'rank'>,
+  values: EditableTicketFields,
+  now: Date
+): EditResult {
+  const fields = editedFields(ticket, values);
+  if (fields.length === 0) return { success: true, content };
+  const steps: Array<(text: string) => EditResult> = [];
+  if (fields.includes('title'))
+    steps.push((text) => setFrontmatterValue(text, 'title', quoteYamlString(values.title)));
+  if (fields.includes('priority')) {
+    steps.push((text) => setFrontmatterValue(text, 'priority', String(values.priority)));
+    if (ticket.rank !== null) steps.push((text) => setFrontmatterValue(text, 'rank', ''));
+  }
+  if (fields.includes('goal')) steps.push((text) => replaceSectionText(text, 'Goal', values.goal));
+  steps.push(
+    (text) => setFrontmatterValue(text, 'updated', formatDate(now)),
+    (text) =>
+      appendLogLine(text, `- ${formatDateTime(now)}: Edited in OZdash (${fields.join(', ')})`)
+  );
+  return chain(content, steps);
 }

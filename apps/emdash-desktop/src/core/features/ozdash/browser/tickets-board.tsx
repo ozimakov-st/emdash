@@ -2,7 +2,7 @@
 // Columns: Needs Oleg, Active, Waiting. Parked and Archive are toggle panels on the
 // right (compact rows, built for many tickets); their open/closed state survives restarts.
 // Cards and rows have a read-only P-chip; cards can be dragged within their priority group.
-// The priority is changed in the parked ticket popup and in the task's Ticket panel.
+// A click on a card or parked row opens the ticket popup (priority ▲/▼, Edit, actions).
 import {
   closestCenter,
   DndContext,
@@ -32,6 +32,7 @@ import {
   CircleHelp,
   Hourglass,
   Pause,
+  Pencil,
   Play,
   Plus,
   RotateCcw,
@@ -83,6 +84,7 @@ import { useMemento } from '@core/primitives/mementos/react';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
 import { ExpandableText } from './expandable-text';
+import { EditTicketDialog } from './new-ticket-form';
 import { PriorityChip, PriorityControl, stopEvent } from './priority-control';
 import { TicketIcon } from './ticket-icon';
 
@@ -640,7 +642,10 @@ function TicketCard({
   );
 }
 
-/** The ticket popup: priority ▲/▼ (the only place to change it), the Goal with "Show more", and actions. */
+/**
+ * The ticket popup: priority ▲/▼ (the quick control), Edit (title, Goal, priority), the
+ * Goal with "Show more", and actions.
+ */
 function TicketPopover({
   ticket,
   anchor,
@@ -657,28 +662,46 @@ function TicketPopover({
   /** The action buttons. */
   children: ReactNode;
 }) {
+  const [editing, setEditing] = useState(false);
   return (
-    <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Content
-        anchor={anchor}
-        side={side}
-        align="start"
-        className="flex w-72 flex-col gap-2 p-3"
-      >
-        <div className="flex items-center gap-1.5 text-xs">
-          <TicketIcon ticket={ticket} size={32} />
-          <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-          <PriorityControl ticket={ticket} />
-        </div>
-        <div className="text-sm font-medium text-foreground">{ticket.title}</div>
-        {ticket.goal?.trim() ? (
-          <ExpandableText text={ticket.goal.trim()} className="text-xs text-foreground-muted" />
-        ) : (
-          <p className="text-xs text-foreground-passive">No goal yet.</p>
-        )}
-        <div className="flex justify-end gap-2">{children}</div>
-      </Popover.Content>
-    </Popover.Root>
+    <>
+      <Popover.Root open={open} onOpenChange={onOpenChange}>
+        <Popover.Content
+          anchor={anchor}
+          side={side}
+          align="start"
+          className="flex w-72 flex-col gap-2 p-3"
+        >
+          <div className="flex items-center gap-1.5 text-xs">
+            <TicketIcon ticket={ticket} size={32} />
+            <span className="font-semibold text-foreground-info">#{ticket.id}</span>
+            <PriorityControl ticket={ticket} />
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="ml-auto"
+              title="Edit the title, Goal and priority"
+              onClick={() => {
+                onOpenChange(false);
+                setEditing(true);
+              }}
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </Button>
+          </div>
+          <div className="text-sm font-medium text-foreground">{ticket.title}</div>
+          {ticket.goal?.trim() ? (
+            <ExpandableText text={ticket.goal.trim()} className="text-xs text-foreground-muted" />
+          ) : (
+            <p className="text-xs text-foreground-passive">No goal yet.</p>
+          )}
+          <div className="flex justify-end gap-2">{children}</div>
+        </Popover.Content>
+      </Popover.Root>
+      <EditTicketDialog ticket={ticket} open={editing} onOpenChange={setEditing} />
+    </>
   );
 }
 
