@@ -38,7 +38,15 @@ import {
 } from 'lucide-react';
 import { when } from 'mobx';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { priorityCardStyle } from '@core/features/ozdash/api/priority-palette';
@@ -384,10 +392,7 @@ function TicketColumn({
     );
     if (next) void ticketsStore.reorder(next);
   };
-  const open = (ticket: TicketSummary) => {
-    if (Date.now() - draggedAt.current < 300) return;
-    onOpen(ticket);
-  };
+  const justDragged = () => Date.now() - draggedAt.current < 300;
 
   return (
     <section
@@ -426,7 +431,8 @@ function TicketColumn({
                   sortable={sortable && group.length > 1}
                   vaultPath={vaultPath}
                   busy={busy === ticket.folder}
-                  onOpen={open}
+                  justDragged={justDragged}
+                  onOpen={onOpen}
                   onPark={onPark}
                 />
               ))}
@@ -468,6 +474,9 @@ type TicketCardProps = {
   /** Shows "New task…" when set. */
   vaultPath: string | null;
   busy: boolean;
+  /** True right after a drag ends: that click must not open the popup. */
+  justDragged: () => boolean;
+  /** Opens the PM session (the popup's "Open session"). */
   onOpen: (ticket: TicketSummary) => void;
   onPark: (ticket: TicketSummary) => void;
   drag: {
@@ -479,96 +488,197 @@ type TicketCardProps = {
   };
 };
 
-function TicketCard({ ticket, vaultPath, busy, onOpen, onPark, drag }: TicketCardProps) {
+function TicketCard({
+  ticket,
+  vaultPath,
+  busy,
+  justDragged,
+  onOpen,
+  onPark,
+  drag,
+}: TicketCardProps) {
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const [popup, setPopup] = useState(false);
   const waiting = ticket.waitingOn
     .map((row) => (row.owner && row.what ? `${row.owner}: ${row.what}` : row.owner || row.what))
     .join('; ');
   const goal = goalPreview(ticket.goal);
   return (
-    <div
-      ref={drag.ref}
-      {...drag.listeners}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ticket ${ticket.id}: ${ticket.title}`}
-      onClick={() => onOpen(ticket)}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onOpen(ticket);
-        }
-      }}
-      style={{ ...priorityCardStyle(ticket.priority), ...drag.style }}
-      className={cn(
-        'group flex cursor-pointer flex-col gap-1.5 rounded-md border border-l-[3px] p-2.5 text-left transition-[border-color,opacity] hover:brightness-110 focus-visible:outline-2',
-        busy && 'opacity-60',
-        drag.dimmed && 'opacity-40',
-        drag.dragging && 'relative z-10 cursor-grabbing shadow-lg'
-      )}
-    >
-      <div className="flex items-center gap-1.5 text-xs">
-        <TicketIcon ticket={ticket} size={32} />
-        <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-        <PriorityChip priority={ticket.priority} />
-        {ticket.status === 'blocked' && <Badge variant="outline">blocked</Badge>}
-        <span className="ml-auto flex items-center gap-1">
-          {busy && <Spinner size="sm" />}
-          {canPark(ticket) && (
-            <button
-              type="button"
-              className="flex size-5 items-center justify-center rounded text-foreground-passive opacity-0 group-hover:opacity-100 hover:bg-background-3 hover:text-foreground focus-visible:opacity-100 disabled:opacity-50"
-              aria-label={`Park ticket ${ticket.id}`}
-              title="Park"
-              disabled={busy}
-              onPointerDown={stopEvent}
-              onKeyDown={stopEvent}
-              onClick={(event) => {
-                event.stopPropagation();
-                onPark(ticket);
-              }}
-            >
-              <Pause className="size-3" />
-            </button>
-          )}
-        </span>
-      </div>
-      <div className="line-clamp-2 text-sm font-medium text-foreground">{ticket.title}</div>
-      {goal && (
-        <p className="line-clamp-3 text-xs text-foreground-muted" title={ticket.goal ?? undefined}>
-          {goal}
-        </p>
-      )}
-      {ticket.nextStep && (
-        <div className="line-clamp-1 text-xs text-foreground-muted">
-          <span className="text-foreground-passive">Next: </span>
-          {ticket.nextStep}
-        </div>
-      )}
-      {waiting && (
-        <div className="flex items-start gap-1 text-xs text-foreground-muted">
-          <Hourglass className="mt-0.5 size-3 shrink-0 text-foreground-passive" aria-hidden />
-          <span className="line-clamp-1">{waiting}</span>
-        </div>
-      )}
-      {ticket.openQuestions.count > 0 && (
-        <div
-          className="flex items-start gap-1 text-xs text-foreground-warning"
-          title={ticket.openQuestions.first ?? undefined}
-        >
-          <CircleHelp className="mt-0.5 size-3 shrink-0" aria-hidden />
-          <span>
-            {ticket.openQuestions.count === 1
-              ? '1 open question'
-              : `${ticket.openQuestions.count} open questions`}
+    <>
+      <div
+        ref={(node) => {
+          drag.ref(node);
+          anchorRef.current = node;
+        }}
+        {...drag.listeners}
+        role="button"
+        tabIndex={0}
+        aria-label={`Ticket ${ticket.id}: ${ticket.title}`}
+        aria-haspopup="dialog"
+        onClick={() => {
+          if (!justDragged()) setPopup(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setPopup(true);
+          }
+        }}
+        style={{ ...priorityCardStyle(ticket.priority), ...drag.style }}
+        className={cn(
+          'group flex cursor-pointer flex-col gap-1.5 rounded-md border border-l-[3px] p-2.5 text-left transition-[border-color,opacity] hover:brightness-110 focus-visible:outline-2',
+          busy && 'opacity-60',
+          drag.dimmed && 'opacity-40',
+          drag.dragging && 'relative z-10 cursor-grabbing shadow-lg'
+        )}
+      >
+        <div className="flex items-center gap-1.5 text-xs">
+          <TicketIcon ticket={ticket} size={32} />
+          <span className="font-semibold text-foreground-info">#{ticket.id}</span>
+          <PriorityChip priority={ticket.priority} />
+          {ticket.status === 'blocked' && <Badge variant="outline">blocked</Badge>}
+          <span className="ml-auto flex items-center gap-1">
+            {busy && <Spinner size="sm" />}
+            {canPark(ticket) && (
+              <button
+                type="button"
+                className="flex size-5 items-center justify-center rounded text-foreground-passive opacity-0 group-hover:opacity-100 hover:bg-background-3 hover:text-foreground focus-visible:opacity-100 disabled:opacity-50"
+                aria-label={`Park ticket ${ticket.id}`}
+                title="Park"
+                disabled={busy}
+                onPointerDown={stopEvent}
+                onKeyDown={stopEvent}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPark(ticket);
+                }}
+              >
+                <Pause className="size-3" />
+              </button>
+            )}
           </span>
         </div>
-      )}
-      <div className="flex items-center gap-2 text-[11px] text-foreground-passive">
-        {ticket.updated && <span>Updated {ticket.updated}</span>}
-        {vaultPath && <NewTaskMenu ticket={ticket} vaultPath={vaultPath} />}
+        <div className="line-clamp-2 text-sm font-medium text-foreground">{ticket.title}</div>
+        {goal && (
+          <p
+            className="line-clamp-3 text-xs text-foreground-muted"
+            title={ticket.goal ?? undefined}
+          >
+            {goal}
+          </p>
+        )}
+        {ticket.nextStep && (
+          <div className="line-clamp-1 text-xs text-foreground-muted">
+            <span className="text-foreground-passive">Next: </span>
+            {ticket.nextStep}
+          </div>
+        )}
+        {waiting && (
+          <div className="flex items-start gap-1 text-xs text-foreground-muted">
+            <Hourglass className="mt-0.5 size-3 shrink-0 text-foreground-passive" aria-hidden />
+            <span className="line-clamp-1">{waiting}</span>
+          </div>
+        )}
+        {ticket.openQuestions.count > 0 && (
+          <div
+            className="flex items-start gap-1 text-xs text-foreground-warning"
+            title={ticket.openQuestions.first ?? undefined}
+          >
+            <CircleHelp className="mt-0.5 size-3 shrink-0" aria-hidden />
+            <span>
+              {ticket.openQuestions.count === 1
+                ? '1 open question'
+                : `${ticket.openQuestions.count} open questions`}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center gap-2 text-[11px] text-foreground-passive">
+          {ticket.updated && <span>Updated {ticket.updated}</span>}
+          {vaultPath && <NewTaskMenu ticket={ticket} vaultPath={vaultPath} />}
+        </div>
       </div>
-    </div>
+      {/* A sibling, not a child: events in the popup must not reach the card (click, drag). */}
+      <TicketPopover
+        ticket={ticket}
+        anchor={anchorRef}
+        side="right"
+        open={popup}
+        onOpenChange={setPopup}
+      >
+        {canPark(ticket) && (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              setPopup(false);
+              onPark(ticket);
+            }}
+          >
+            <Pause className="size-3.5" />
+            Park
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          autoFocus
+          disabled={busy}
+          onClick={() => {
+            setPopup(false);
+            onOpen(ticket);
+          }}
+        >
+          <Play className="size-3.5" />
+          Open session
+        </Button>
+      </TicketPopover>
+    </>
+  );
+}
+
+/** The ticket popup: priority ▲/▼ (the only place to change it), the Goal with "Show more", and actions. */
+function TicketPopover({
+  ticket,
+  anchor,
+  side,
+  open,
+  onOpenChange,
+  children,
+}: {
+  ticket: TicketSummary;
+  anchor: RefObject<HTMLDivElement | null>;
+  side: 'left' | 'right';
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The action buttons. */
+  children: ReactNode;
+}) {
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Content
+        anchor={anchor}
+        side={side}
+        align="start"
+        className="flex w-72 flex-col gap-2 p-3"
+      >
+        <div className="flex items-center gap-1.5 text-xs">
+          <TicketIcon ticket={ticket} size={32} />
+          <span className="font-semibold text-foreground-info">#{ticket.id}</span>
+          <PriorityControl ticket={ticket} />
+        </div>
+        <div className="text-sm font-medium text-foreground">{ticket.title}</div>
+        {ticket.goal?.trim() ? (
+          <ExpandableText text={ticket.goal.trim()} className="text-xs text-foreground-muted" />
+        ) : (
+          <p className="text-xs text-foreground-passive">No goal yet.</p>
+        )}
+        <div className="flex justify-end gap-2">{children}</div>
+      </Popover.Content>
+    </Popover.Root>
   );
 }
 
@@ -707,55 +817,41 @@ function ParkedRow({
           <Archive className="size-3" />
         </button>
       </div>
-      <Popover.Root open={confirming} onOpenChange={setConfirming}>
-        <Popover.Content
-          anchor={rowRef}
-          side="left"
-          align="start"
-          className="flex w-72 flex-col gap-2 p-3"
+      <TicketPopover
+        ticket={ticket}
+        anchor={rowRef}
+        side="left"
+        open={confirming}
+        onOpenChange={setConfirming}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            setConfirming(false);
+            onArchive(ticket);
+          }}
         >
-          <div className="flex items-center gap-1.5 text-xs">
-            <TicketIcon ticket={ticket} size={32} />
-            <span className="font-semibold text-foreground-info">#{ticket.id}</span>
-            <PriorityControl ticket={ticket} />
-          </div>
-          <div className="text-sm font-medium text-foreground">{ticket.title}</div>
-          {ticket.goal?.trim() ? (
-            <ExpandableText text={ticket.goal.trim()} className="text-xs text-foreground-muted" />
-          ) : (
-            <p className="text-xs text-foreground-passive">No goal yet.</p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                setConfirming(false);
-                onArchive(ticket);
-              }}
-            >
-              <Archive className="size-3.5" />
-              Archive
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="primary"
-              autoFocus
-              disabled={busy}
-              onClick={() => {
-                setConfirming(false);
-                onStart(ticket);
-              }}
-            >
-              <Play className="size-3.5" />
-              Start
-            </Button>
-          </div>
-        </Popover.Content>
-      </Popover.Root>
+          <Archive className="size-3.5" />
+          Archive
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          autoFocus
+          disabled={busy}
+          onClick={() => {
+            setConfirming(false);
+            onStart(ticket);
+          }}
+        >
+          <Play className="size-3.5" />
+          Start
+        </Button>
+      </TicketPopover>
     </>
   );
 }
@@ -793,7 +889,7 @@ function ArchivedRow({
 /**
  * "New task…": pick a project, then the New Task dialog opens with this ticket as
  * its OZ Tickets issue. Creating the task records it in the ticket (see ticket-issues.ts).
- * The PM project is not offered: its only task for a ticket is the PM session (card click).
+ * The PM project is not offered: its only task for a ticket is the PM session (Open session in the ticket popup).
  */
 const NewTaskMenu = observer(function NewTaskMenu({
   ticket,

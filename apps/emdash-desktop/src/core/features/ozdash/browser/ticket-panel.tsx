@@ -21,7 +21,7 @@ import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state
 import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
-import { PriorityControl } from './priority-control';
+import { PriorityChip } from './priority-control';
 import { TicketIcon } from './ticket-icon';
 
 /** The PM project's id in this window, or null. Call from an `observer`. */
@@ -118,7 +118,7 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
         <div className="flex items-center gap-1.5">
           <TicketIcon ticket={ticket} size={32} />
           <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
-          <PriorityControl ticket={ticket} />
+          <PriorityChip priority={ticket.priority} />
           {updated && (
             <span
               className="ml-auto shrink-0 text-[11px] text-foreground-passive tabular-nums"

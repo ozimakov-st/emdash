@@ -15,13 +15,14 @@ The PM project opens on a **Tickets** board (code in
 `~/Projects/work/vault/tickets/*/ticket.md` (override with `OZDASH_VAULT_PATH`) and
 updates when the files change. Columns: Needs Oleg, Active, Waiting. **Parked** and
 **Archive** are toggle panels on the right (open/closed is remembered; a search shows
-matching rows even in a closed panel). Click a card to open the ticket's PM session (or
-start one with `/oz-pm <id>`). A parked row has Start and Archive (-> dropped); an
+matching rows even in a closed panel). Click a card or a parked row to open the ticket
+popup: priority ▲/▼, the Goal with Show more, and actions (card: Park, Open session,
+which opens the PM session or starts one with `/oz-pm <id>`). A parked row has Start and Archive (-> dropped); an
 archived row has Restore (-> parked). Each write changes the ticket and then syncs the
 vault repo (add, commit, pull --rebase --autostash, push).
 "New task…" on an open card starts a task for the ticket in another project.
-Cards and rows have a read-only P-chip (P1-P4). ▲/▼ to change it (debounced into one
-write) are in the parked row's popup and in a task's Ticket panel. Cards have a
+Cards, rows and a task's Ticket panel have a read-only P-chip (P1-P4); ▲/▼ to change
+it (debounced into one write) are only in the ticket popup. Cards have a
 **Park** button and the Goal (3 lines); drag a card to reorder it within its priority
 group (writes `rank:` 10, 20, 30…). Colors per priority: `ozdash/api/priority-palette.ts`.
 Each ticket shows a pixel icon: its `icon.svg`, else a sprite made from its id. OZdash
