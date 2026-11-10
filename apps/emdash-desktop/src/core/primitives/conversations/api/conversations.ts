@@ -115,6 +115,8 @@ export type CreateConversationParams = {
   options?: Record<string, string | boolean>;
   /** Model to pass to the TUI CLI. Absent or empty string means use the CLI default. */
   model?: string;
+  /** Fork (ozimakov-st): reasoning effort for the TUI CLI (MCP create_conversation). */
+  effort?: string;
   isInitialConversation?: boolean;
   initialSize?: { cols: number; rows: number };
   initialPrompt?: string;

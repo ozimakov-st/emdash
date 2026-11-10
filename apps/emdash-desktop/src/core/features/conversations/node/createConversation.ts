@@ -103,6 +103,8 @@ export async function createConversation(
           type: 'pty',
           ...(params.autoApprove !== undefined && { autoApprove: params.autoApprove }),
           ...(params.model && { model: params.model }),
+          // Fork (ozimakov-st): reasoning effort (MCP create_conversation).
+          ...(params.effort && { effort: params.effort }),
           ...(params.initialPrompt && { initialPrompt: params.initialPrompt }),
         };
   const config = configObj;

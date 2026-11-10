@@ -12,6 +12,8 @@ type TaskRow = {
 };
 type ConversationRow = {
   id: string;
+  title?: string;
+  config?: unknown;
   provider: string | null;
   type: string | null;
   agentStatus: string | null;
@@ -28,6 +30,8 @@ const TASK: TaskRow = {
 
 const PTY_CONVERSATION: ConversationRow = {
   id: 'conv-pty',
+  title: 'executor',
+  config: { version: '1', type: 'pty', model: 'opus' },
   provider: 'claude',
   type: 'pty',
   agentStatus: 'awaiting-input',
@@ -289,14 +293,18 @@ describe('getTaskStatus', () => {
         conversations: [
           {
             conversationId: 'conv-pty',
+            title: 'executor',
             provider: 'claude',
+            model: 'opus',
             type: 'pty',
             agentStatus: 'awaiting-input',
             updatedAt: '2026-11-05T10:00:00.000Z',
           },
           {
             conversationId: 'conv-acp',
+            title: '',
             provider: 'codex',
+            model: null,
             type: 'acp',
             agentStatus: 'idle',
             updatedAt: '2026-11-05 08:00:00',
@@ -309,6 +317,29 @@ describe('getTaskStatus', () => {
         },
       })
     );
+  });
+
+  it('reads the output of the conversation given by conversationId', async () => {
+    const fake = fakeClient({
+      ptyOutput: 'review output',
+      acpSessionState: {
+        lifecycle: 'working',
+        transcript: { activeTurn: { items: [{ kind: 'message', role: 'assistant', text: 'x' }] } },
+      },
+    });
+    const deps = dependencies({
+      client: fake.client,
+      conversations: [ACP_CONVERSATION, PTY_CONVERSATION],
+    });
+    const result = await getTaskStatus(deps, { ...base, conversationId: 'conv-acp' });
+    expect(result).toMatchObject({
+      data: { latestOutput: { conversationId: 'conv-acp', text: 'x' } },
+    });
+  });
+
+  it('rejects a conversationId that is not in the task', async () => {
+    const result = await getTaskStatus(dependencies({}), { ...base, conversationId: 'nope' });
+    expect(result).toEqual(err('Conversation nope not found in task task-1'));
   });
 
   it('keeps only the last maxChars characters', async () => {

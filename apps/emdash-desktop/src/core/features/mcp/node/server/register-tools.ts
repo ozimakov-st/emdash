@@ -10,6 +10,7 @@ import { getProvisionedWorkspaceBranch } from '@core/features/workspaces/api/nod
 import { projects, tasks } from '@core/services/app-db/node/schema';
 import { addLocalProject } from './add-project';
 import { attachProject } from './attach-project';
+import { createConversationInTask } from './create-conversation';
 import { createTaskFromPrompt, validProviderIds } from './create-task-from-prompt';
 import type { McpToolDependencies } from './dependencies';
 import { taskTicketStoreOf } from './ozdash-task-ticket-store';
@@ -496,6 +497,56 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
     })
   );
 
+  // Fork (ozimakov-st): a second agent session (for example a reviewer) in an existing task.
+  server.registerTool(
+    'create_conversation',
+    {
+      title: 'Create conversation',
+      description:
+        'Adds a new agent conversation (a session, shown as a tab) to an existing Emdash task ' +
+        "and starts it on a prompt in the task's existing worktree, for example a reviewer " +
+        'next to the executor. Terminal agents only. Provider, model, effort and ' +
+        'auto-approve work as in create_task. The project must be open in Emdash. Use ' +
+        'get_task_status with the returned conversationId to read its output, and ' +
+        'send_task_message with it to talk to it.',
+      inputSchema: {
+        projectId: projectIdInput,
+        taskId: taskIdInput,
+        prompt: z.string().min(1).describe('The prompt the new agent session starts with'),
+        provider: z
+          .string()
+          .optional()
+          .describe(
+            `Agent provider id (${validProviderIds()}); defaults to the app's default agent`
+          ),
+        model: z
+          .string()
+          .optional()
+          .describe('Model id for the agent, as its CLI accepts it (see create_task)'),
+        effort: z
+          .string()
+          .optional()
+          .describe('Reasoning effort for the agent, for example "high" (see create_task)'),
+        autoApprove: z
+          .boolean()
+          .optional()
+          .describe(
+            'Run the agent without permission prompts; defaults to true (pass false to get ' +
+              'permission prompts). The response reports the value that was applied'
+          ),
+        title: z
+          .string()
+          .optional()
+          .describe('Conversation title, for example "Review"; defaults to "<Provider> (n)"'),
+      },
+      annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    guarded(dependencies, 'create_conversation', async (input) => {
+      const result = await createConversationInTask(dependencies, input);
+      return result.success ? textResult(result.data) : errorResult(result.error);
+    })
+  );
+
   server.registerTool(
     'rename_task',
     {
@@ -748,9 +799,10 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
     {
       title: 'Get task status',
       description:
-        "Reads a task's status, the agent status of each of its conversations (idle, working, " +
-        'awaiting-input, completed, or error, as shown in Emdash), and the recent output of the ' +
-        'most recently active conversation. latestOutput.text is the end of that output: the ' +
+        "Reads a task's status, the agent status, title, provider and model of each of its " +
+        'conversations (status: idle, working, awaiting-input, completed, or error, as shown in ' +
+        'Emdash), and the recent output of the most recently active conversation, or of ' +
+        'conversationId when given. latestOutput.text is the end of that output: the ' +
         'terminal text without color codes for a terminal agent, or the latest assistant ' +
         'message for a chat UI agent. Terminal agents that report replies through hooks also ' +
         'get latestOutput.lastAssistantMessage. Read-only.',
@@ -765,6 +817,13 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
           .describe(
             `How many characters of output to return, counted from the end; defaults to ` +
               `${DEFAULT_STATUS_MAX_CHARS}, at most ${MAX_STATUS_MAX_CHARS}`
+          ),
+        conversationId: z
+          .string()
+          .optional()
+          .describe(
+            'Read latestOutput from this conversation (an id from conversations); defaults to ' +
+              'the most recently active one'
           ),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },

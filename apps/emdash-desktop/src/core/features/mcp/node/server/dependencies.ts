@@ -8,6 +8,7 @@ import type { TaskTicket } from '@core/features/mcp/api/ozdash-task-ticket';
 import type { ProjectAttachmentManager } from '@core/features/projects/api/node/project-attachment-manager';
 import type { TaskService } from '@core/features/tasks/api/node/task-service';
 import type { WorkspaceIdentityService } from '@core/features/workspaces/api/node/workspace-identity-service';
+import type { Conversation, CreateConversationParams } from '@core/primitives/conversations/api';
 import type {
   CreateProjectParams,
   CreateProjectResult,
@@ -42,6 +43,11 @@ export type McpToolDependencies = Readonly<{
   startInitialConversation: StartInitialConversation;
   /** Fork (ozimakov-st): task ticket markers; defaults to the app db's kv table. */
   taskTickets?: TaskTicketStore;
+  /**
+   * Fork (ozimakov-st): adds a conversation to a task and, for a terminal agent, starts it:
+   * the same operation as "new conversation" in the task UI. Used by create_conversation.
+   */
+  createConversation?: (params: CreateConversationParams) => Promise<Conversation>;
   /** Fork (ozimakov-st): create_task made a task with a `ticket` (starts a parked ticket). */
   onTicketTaskCreated?: (event: McpTicketTaskCreated) => void;
 }>;

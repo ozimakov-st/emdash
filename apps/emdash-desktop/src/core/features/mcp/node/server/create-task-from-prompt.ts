@@ -76,7 +76,7 @@ export function validProviderIds(): string {
     .join(', ');
 }
 
-async function resolveProvider(
+export async function resolveProvider(
   appSettings: AppSettingsService,
   requested: string | undefined
 ): Promise<Result<AgentProviderId, string>> {
@@ -105,11 +105,7 @@ async function resolveLaunchSettings(
     providerId: provider,
   });
   if (conversationType === 'pty') {
-    return ok({
-      autoApprove:
-        getPlugin(provider).capabilities.autoApprove.kind === 'supported' &&
-        (input.autoApprove ?? MCP_DEFAULT_AUTO_APPROVE),
-    });
+    return ok({ autoApprove: resolvePtyAutoApprove(provider, input.autoApprove) });
   }
 
   const options = { ...settings.acp.options };
@@ -134,6 +130,17 @@ async function resolveLaunchSettings(
  * `autoApprove: false` (Oleg's personal fork; upstream uses the saved terminal setting).
  */
 export const MCP_DEFAULT_AUTO_APPROVE = true;
+
+/** Fork (ozimakov-st): the auto-approve a terminal agent gets (false when it has no such mode). */
+export function resolvePtyAutoApprove(
+  provider: AgentProviderId,
+  requested: boolean | undefined
+): boolean {
+  return (
+    getPlugin(provider).capabilities.autoApprove.kind === 'supported' &&
+    (requested ?? MCP_DEFAULT_AUTO_APPROVE)
+  );
+}
 
 /** A model id or effort level that is safe to pass as one CLI argument. */
 const CLI_VALUE_PATTERN = /^[\w.:\-[\]=,/]{1,100}$/;

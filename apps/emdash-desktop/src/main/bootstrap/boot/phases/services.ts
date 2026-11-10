@@ -19,6 +19,7 @@ import { ProviderTokenDispatcher } from '@core/features/account/node/services/pr
 import { getPluginMetadata } from '@core/features/agents/api/node/plugin-registry';
 import { AutomationsService } from '@core/features/automations/api/node/automations-service';
 import { buildAutomationDeployment } from '@core/features/automations/node/deployment-builder';
+import { createConversation } from '@core/features/conversations/node/createConversation';
 import { getProviderSettingsService } from '@core/features/conversations/node/provider-settings-service';
 import { createConversationDeletionSweepKind } from '@core/features/conversations/node/sweep/conversation-deletion-sweep';
 import { ConversationBackfillService } from '@core/features/conversations/node/sync/conversation-backfill';
@@ -161,6 +162,7 @@ import { sweepSessionHygiene } from '@main/core/runtime/operations/session-hygie
 import { createDesktopSessionIntentStores } from '@main/core/runtime/session-intent-stores';
 import { executeOAuthFlow } from '@main/core/shared/oauth-flow';
 import { getTerminalColorEnv } from '@main/core/terminal-shell/color-env';
+import { withCompensation } from '@main/core/utils/compensation';
 import { runLocalCommand } from '@main/core/utils/exec';
 import { cleanupLegacyOperationsDatabases } from '@main/db/legacy-operations-cleanup';
 import type { DesktopRuntimes } from '@main/gateway/desktop-runtimes';
@@ -893,6 +895,17 @@ export async function bootServices(
     runtimes,
     readProviderSettings: (key) => conversationPreferences.read(key),
     onTicketTaskCreated: ozdashTicketTaskCreated, // Fork (ozimakov-st)
+    // Fork (ozimakov-st): MCP create_conversation, the UI's "new conversation" operation.
+    createConversation: (params) =>
+      createConversation(params, {
+        db,
+        telemetry: telemetryService,
+        taskSessions: taskSessionManager,
+        withCompensation,
+        runtimes,
+        hostIsReachable,
+        workspaceIdentity,
+      }),
     startInitialConversation: createStartInitialConversation({
       db,
       logger: log,
@@ -922,6 +935,7 @@ export async function bootServices(
   appScope.add(() => ipcMain.removeHandler(OZDASH_TASK_TICKETS_CHANNEL));
   // Fork (ozimakov-st): the Tickets board (see main/host/ozdash-tickets.ts).
   appScope.add(registerOzdashTickets(mcpServer.dependencies, log));
+
   // OZdash: Dock badge with the number of tasks that need attention.
   appScope.add(registerOzdashAttentionBadge());
   // OZdash: Glass chime + macOS banner when a task comes back to Oleg.

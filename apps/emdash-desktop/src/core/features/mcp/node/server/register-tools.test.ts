@@ -209,6 +209,7 @@ describe('buildEmdashMcpServer', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'add_project',
       'archive_task',
+      'create_conversation',
       'create_task',
       'delete_task',
       'get_task_status',
@@ -714,7 +715,9 @@ describe('buildEmdashMcpServer', () => {
       conversations: [
         {
           conversationId: 'task-1',
+          title: '',
           provider: 'claude',
+          model: null,
           type: 'pty',
           agentStatus: 'awaiting-input',
           updatedAt: '2026-11-05T10:00:00.000Z',
@@ -722,6 +725,147 @@ describe('buildEmdashMcpServer', () => {
       ],
       latestOutput: { conversationId: 'task-1', text: 'STATUS: done\n' },
       ticket: null,
+    });
+  });
+
+  describe('create_conversation (fork)', () => {
+    function conversationDeps(overrides: Partial<McpToolDependencies> = {}) {
+      const createConversation = vi.fn(async (params: { id: string; title: string }) => ({
+        id: params.id,
+        title: params.title,
+      }));
+      const provisionWorkspace = vi.fn(async () => ok({ path: '/worktrees/task-1' }));
+      const deps = dependencies({
+        createConversation: createConversation as never,
+        tasks: { provisionWorkspace } as never,
+        ...overrides,
+      });
+      return { deps, createConversation, provisionWorkspace };
+    }
+
+    it('documents its arguments', async () => {
+      const client = await connect(dependencies());
+      const { tools } = await client.listTools();
+      const tool = tools.find((candidate) => candidate.name === 'create_conversation');
+      expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual([
+        'autoApprove',
+        'effort',
+        'model',
+        'projectId',
+        'prompt',
+        'provider',
+        'taskId',
+        'title',
+      ]);
+      expect(tool?.inputSchema.required?.sort()).toEqual(['projectId', 'prompt', 'taskId']);
+      const status = tools.find((candidate) => candidate.name === 'get_task_status');
+      expect(status?.inputSchema.properties).toHaveProperty('conversationId');
+    });
+
+    it('starts a terminal conversation in the task with model, effort and auto-approve', async () => {
+      const { deps, createConversation, provisionWorkspace } = conversationDeps();
+
+      const result = parse(
+        await callTool(deps, 'create_conversation', {
+          projectId: 'p',
+          taskId: 'task-1',
+          prompt: ' Review the diff ',
+          provider: 'claude',
+          model: 'opus',
+          effort: 'high',
+          title: 'Review',
+        })
+      ) as Record<string, unknown>;
+
+      expect(provisionWorkspace).toHaveBeenCalledWith('task-1');
+      expect(createConversation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'p',
+          taskId: 'task-1',
+          provider: 'claude',
+          title: 'Review',
+          type: 'pty',
+          autoApprove: true,
+          model: 'opus',
+          effort: 'high',
+          initialPrompt: 'Review the diff',
+        })
+      );
+      expect(result).toEqual({
+        conversationId: expect.any(String),
+        title: 'Review',
+        provider: 'claude',
+        model: 'opus',
+        effort: 'high',
+        autoApprove: true,
+      });
+    });
+
+    it('drops effort for a provider without it and keeps autoApprove false when asked', async () => {
+      const { deps, createConversation } = conversationDeps();
+
+      const result = parse(
+        await callTool(deps, 'create_conversation', {
+          projectId: 'p',
+          taskId: 'task-1',
+          prompt: 'review',
+          provider: 'cursor',
+          effort: 'high',
+          autoApprove: false,
+        })
+      );
+
+      expect(result).toMatchObject({ provider: 'cursor', effort: null, autoApprove: false });
+      expect(createConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Cursor (1)', autoApprove: false })
+      );
+      expect(createConversation.mock.calls[0][0]).not.toHaveProperty('effort');
+    });
+
+    it('refuses when the project is not open, or the provider is unknown', async () => {
+      const closed = conversationDeps({
+        projects: {
+          track: () => cell({ kind: 'attached' }),
+          requireAttached: () => ({ success: false }),
+        } as never,
+      });
+      const notOpen = await callTool(closed.deps, 'create_conversation', {
+        projectId: 'p',
+        taskId: 'task-1',
+        prompt: 'x',
+      });
+      expect(notOpen.isError).toBe(true);
+      expect(notOpen.content[0].text).toContain('not open in Emdash');
+      expect(closed.createConversation).not.toHaveBeenCalled();
+
+      const { deps } = conversationDeps();
+      const unknown = await callTool(deps, 'create_conversation', {
+        projectId: 'p',
+        taskId: 'task-1',
+        prompt: 'x',
+        provider: 'nope',
+      });
+      expect(unknown.content[0].text).toContain('Unknown provider "nope"');
+    });
+
+    it('rejects an unknown or archived task', async () => {
+      const missing = conversationDeps({ db: fakeDb([]) as never });
+      const result = await callTool(missing.deps, 'create_conversation', {
+        projectId: 'p',
+        taskId: 'gone',
+        prompt: 'x',
+      });
+      expect(result.content[0].text).toBe('Task not found in project p: gone');
+
+      const archived = conversationDeps({
+        db: fakeDb([{ ...TASK_ROW, archivedAt: '2026-11-01' }]) as never,
+      });
+      const archivedResult = await callTool(archived.deps, 'create_conversation', {
+        projectId: 'p',
+        taskId: 'task-1',
+        prompt: 'x',
+      });
+      expect(archivedResult.content[0].text).toContain('is archived');
     });
   });
 

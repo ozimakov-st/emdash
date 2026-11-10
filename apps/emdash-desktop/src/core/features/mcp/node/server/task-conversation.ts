@@ -36,6 +36,9 @@ type TaskRecord = Readonly<{
 
 type ConversationRecord = Readonly<{
   id: string;
+  /** Fork (ozimakov-st): the conversation title and the model passed to its CLI. */
+  title: string;
+  model: string | null;
   provider: string | null;
   type: 'pty' | 'acp';
   agentStatus: AgentStatus;
@@ -80,6 +83,8 @@ async function listTaskConversations(
   const rows = await dependencies.db
     .select({
       id: conversations.id,
+      title: conversations.title,
+      config: conversations.config,
       provider: conversations.provider,
       type: conversations.type,
       agentStatus: conversations.agentStatus,
@@ -97,6 +102,8 @@ async function listTaskConversations(
   return rows
     .map((row) => ({
       id: row.id,
+      title: row.title ?? '',
+      model: (row.config?.type === 'pty' && row.config.model) || null,
       provider: row.provider,
       type: row.type === 'acp' ? ('acp' as const) : ('pty' as const),
       // No status recorded yet reads as idle, as it does in the task list.
@@ -239,6 +246,8 @@ export type TaskStatusInput = {
   projectId: string;
   taskId: string;
   maxChars?: number;
+  /** Fork (ozimakov-st): read latestOutput from this conversation (default: most recent). */
+  conversationId?: string;
 };
 
 export type TaskStatus = {
@@ -246,7 +255,9 @@ export type TaskStatus = {
   taskStatus: string;
   conversations: Array<{
     conversationId: string;
+    title: string;
     provider: string | null;
+    model: string | null;
     type: 'pty' | 'acp';
     agentStatus: AgentStatus;
     updatedAt: string;
@@ -280,14 +291,21 @@ export async function getTaskStatus(
     taskStatus: task.data.status,
     conversations: taskConversations.map((conversation) => ({
       conversationId: conversation.id,
+      title: conversation.title,
       provider: conversation.provider,
+      model: conversation.model,
       type: conversation.type,
       agentStatus: conversation.agentStatus,
       updatedAt: conversation.activityAt,
     })),
     latestOutput: null,
   };
-  const latest = taskConversations[0];
+  const latest = input.conversationId
+    ? taskConversations.find((conversation) => conversation.id === input.conversationId)
+    : taskConversations[0];
+  if (!latest && input.conversationId) {
+    return err(`Conversation ${input.conversationId} not found in task ${input.taskId}`);
+  }
   if (!latest) return ok(status);
 
   const client = await resolveTaskClient(dependencies, task.data);
@@ -309,7 +327,12 @@ export async function getTaskStatus(
     return ok({ ...status, note: 'Output could not be read from the task host.' });
   }
   if (!output) {
-    return ok({ ...status, note: 'The latest conversation has no output to show yet.' });
+    return ok({
+      ...status,
+      note: input.conversationId
+        ? 'This conversation has no output to show yet.'
+        : 'The latest conversation has no output to show yet.',
+    });
   }
   return ok({
     ...status,
