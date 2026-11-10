@@ -1,15 +1,18 @@
 // Fork (ozimakov-st): the Ticket panel in the task's right sidebar (next to Changes /
 // Files / Conversations), for a task that is a ticket's PM session (`pm_session`) or a
-// child task (ticket marker). The "Ticket" toggle in the task titlebar opens it; the
-// sidebar remembers it per task like the other tabs. Follows the ticket file live.
+// child task (ticket marker, or an `emdash: <task id>` ref in the ticket file). The
+// "Ticket" toggle in the task titlebar opens it; the sidebar remembers it per task like
+// the other tabs. It shows the ticket briefly, then the ticket's Sessions (PM session
+// first, then its other tasks and their conversations). Follows the ticket file live.
 import { Alert, Button, ToggleGroup, Tooltip } from '@emdash/ui/react/primitives';
-import { Bot, CircleHelp, Hourglass, KanbanSquare, Pencil, Ticket } from 'lucide-react';
+import { CircleHelp, KanbanSquare, Pencil, Ticket } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useTaskTicketInfo } from '@core/features/mcp/api/browser/ozdash-task-tickets';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { priorityColor } from '@core/features/ozdash/api/priority-palette';
+import { ticketByFileRef } from '@core/features/ozdash/api/ticket-sessions';
 import {
   isFlashPriority,
   relativeUpdated,
@@ -18,13 +21,12 @@ import {
 } from '@core/features/ozdash/api/tickets';
 import { getProjectManagerStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
-import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
-import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
-import { cn } from '@core/primitives/styling/browser/cn';
+import { ExpandableText } from './expandable-text';
 import { EditTicketDialog } from './new-ticket-form';
 import { PriorityChip } from './priority-control';
 import { TicketIcon } from './ticket-icon';
+import { TicketSessionsSection } from './ticket-sessions-panel';
 
 /** The PM project's id in this window, or null. Call from an `observer`. */
 function pmProjectId(): string | null {
@@ -41,7 +43,10 @@ function useTaskTicket(taskId: string) {
     ticketsStore.ensureStarted();
   }, []);
   const found = ticketForTask(taskId, ticketsStore.tickets, marker?.ticket.id ?? null);
-  return found ? { ...found, marker } : null;
+  if (found) return found;
+  // A child linked by `/oz-ticket-link` has no marker, only a ref in the ticket file.
+  const linked = ticketByFileRef(taskId, ticketsStore.tickets);
+  return linked ? { ticket: linked, role: 'child' as const } : null;
 }
 
 const STATUS_LABEL: Record<TicketSummary['status'], string> = {
@@ -86,23 +91,10 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
   if (!found) {
     return <p className="p-3 text-xs text-foreground-passive">This task has no ticket.</p>;
   }
-  const { ticket, role, marker } = found;
+  const { ticket, role } = found;
   const pmId = pmProjectId();
-  // A child task's PM session: the marker's, else the ticket's `pm_session` when it is live.
-  const pmSession =
-    role !== 'child'
-      ? null
-      : marker?.pmSession
-        ? { projectId: marker.pmSession.projectId, taskId: marker.pmSession.taskId }
-        : ticket.pmSession && pmId && getTaskManagerStore(pmId)?.tasks.has(ticket.pmSession)
-          ? { projectId: pmId, taskId: ticket.pmSession }
-          : null;
   const { accent } = priorityColor(ticket.priority);
-  const questions =
-    ticket.openQuestions.items ?? (ticket.openQuestions.first ? [ticket.openQuestions.first] : []);
-  const waiting = ticket.waitingOn.map((row) =>
-    row.owner && row.what ? `${row.owner}: ${row.what}` : row.owner || row.what
-  );
+  const questionCount = ticket.openQuestions.items?.length ?? ticket.openQuestions.count;
   const updated = relativeUpdated(ticket.updated, new Date());
 
   return (
@@ -123,7 +115,7 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
         }}
       >
         <div className="flex items-center gap-1.5">
-          <TicketIcon ticket={ticket} size={32} />
+          <TicketIcon ticket={ticket} size={24} />
           <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
           <PriorityChip priority={ticket.priority} />
           {updated && (
@@ -167,18 +159,6 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
               Board
             </Button>
           )}
-          {pmSession && (
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              title="Open the ticket's PM session"
-              onClick={() => navigate(taskViewDef(pmSession))}
-            >
-              <Bot className="size-3.5" />
-              PM session
-            </Button>
-          )}
         </div>
       </div>
       <EditTicketDialog ticket={ticket} open={editing} onOpenChange={setEditing} />
@@ -192,72 +172,26 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
           </Alert.Root>
         </div>
       )}
-      <div className="flex flex-col gap-3 p-3">
-        <Field label="Goal">
-          <p
-            className={cn(
-              'break-words whitespace-pre-wrap',
-              ticket.goal ? 'text-foreground' : 'text-foreground-passive'
-            )}
-          >
-            {ticket.goal ?? 'No goal yet.'}
-          </p>
-        </Field>
+      <div className="flex flex-col gap-2 border-b border-border p-3">
+        {ticket.goal ? (
+          <ExpandableText text={ticket.goal} className="text-foreground" />
+        ) : (
+          <p className="text-foreground-passive">No goal yet.</p>
+        )}
         {ticket.nextStep && (
-          <Field label="Next step">
-            <p className="break-words text-foreground-muted">{ticket.nextStep}</p>
-          </Field>
+          <p className="break-words text-foreground-muted">
+            <span className="text-[11px] font-medium text-foreground-passive">Next step: </span>
+            {ticket.nextStep}
+          </p>
         )}
-        {waiting.length > 0 && (
-          <Field label="Waiting on" icon={<Hourglass className="size-3" aria-hidden />}>
-            <ul className="list-disc pl-4 break-words text-foreground-muted">
-              {waiting.map((text, index) => (
-                <li key={index}>{text}</li>
-              ))}
-            </ul>
-          </Field>
-        )}
-        {questions.length > 0 && (
-          <Field
-            label={`Open questions (${questions.length})`}
-            icon={<CircleHelp className="size-3" aria-hidden />}
-            warning
-          >
-            <ul className="list-disc pl-4 break-words text-foreground">
-              {questions.map((text, index) => (
-                <li key={index}>{text}</li>
-              ))}
-            </ul>
-          </Field>
+        {questionCount > 0 && (
+          <div className="flex items-center gap-1 text-[11px] font-medium text-foreground-warning">
+            <CircleHelp className="size-3" aria-hidden />
+            {questionCount} open {questionCount === 1 ? 'question' : 'questions'}
+          </div>
         )}
       </div>
+      <TicketSessionsSection ticket={ticket} taskId={taskId} />
     </section>
   );
 });
-
-function Field({
-  label,
-  icon,
-  warning,
-  children,
-}: {
-  label: string;
-  icon?: ReactNode;
-  warning?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div
-        className={cn(
-          'flex items-center gap-1 text-[11px] font-medium',
-          warning ? 'text-foreground-warning' : 'text-foreground-passive'
-        )}
-      >
-        {icon}
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}

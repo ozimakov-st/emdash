@@ -24,7 +24,6 @@ import { observer } from 'mobx-react-lite';
 import { ConnectionStatusDot } from '@core/features/machines/contributions/browser/connection-status-dot';
 import {
   OzdashNoTicketChip,
-  OzdashSessionsSidebarToggle,
   OzdashTicketSidebarToggle,
 } from '@core/features/ozdash/contributions/browser';
 import {
@@ -422,8 +421,6 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
             </Tooltip.Root>
             {/* Fork (ozimakov-st): the Ticket panel (only for a task with a ticket). */}
             <OzdashTicketSidebarToggle taskId={taskId} />
-            {/* Fork (ozimakov-st): the ticket's sessions (only in a PM session). */}
-            <OzdashSessionsSidebarToggle taskId={taskId} />
           </ToggleGroup.Root>
         </div>
       }

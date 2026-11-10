@@ -1,9 +1,11 @@
-// Fork (ozimakov-st): the "Sessions" tab in a PM session's right sidebar: every task of
-// the ticket, across all projects, with the sidebar's live agent status (rule:
-// ozdash/api/ticket-sessions.ts). A click opens the task, like the left sidebar.
+// Fork (ozimakov-st): the "Sessions" part of the Ticket tab (any task of a ticket): the
+// PM session first, then every other task of the ticket, across all projects, with the
+// sidebar's live agent status (rule: ozdash/api/ticket-sessions.ts). A task with two or
+// more conversations (executor, reviewers) lists them too. A click opens the task (and
+// the conversation), like the left sidebar and the command palette.
 import { AgentStatus } from '@emdash/ui/react/components';
-import { RelativeTime, ToggleGroup, Tooltip } from '@emdash/ui/react/primitives';
-import { Bot, ListTree } from 'lucide-react';
+import { RelativeTime } from '@emdash/ui/react/primitives';
+import { Bot } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
 import { AgentIcon } from '@core/features/agents/contributions/browser/agent-icon';
@@ -11,19 +13,25 @@ import {
   taskAgentStatus,
   taskConversationStats,
 } from '@core/features/conversations/api/browser/conversation-selectors';
+import { formatConversationTitleForDisplay } from '@core/features/conversations/api/browser/conversation-title-utils';
+import { conversationRegistry } from '@core/features/conversations/api/browser/stores/conversation-registry';
 import {
   refreshTaskTickets,
   taskTicketMarkers,
 } from '@core/features/mcp/api/browser/ozdash-task-tickets';
 import { attentionRowClass } from '@core/features/ozdash/api/attention';
 import { taskAttentionLevel } from '@core/features/ozdash/api/browser/attention';
-import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import {
+  conversationLabel,
+  listedConversations,
   mainProviderId,
-  selectTicketSessions,
   sessionStatusLabel,
+  ticketSessionRows,
+  type TicketSessionConversation,
+  type TicketSessionRow,
   type TicketSessionTask,
 } from '@core/features/ozdash/api/ticket-sessions';
+import type { TicketSummary } from '@core/features/ozdash/api/tickets';
 import {
   asAvailableProject,
   getProjectManagerStore,
@@ -31,6 +39,7 @@ import {
 } from '@core/features/projects/api/browser/stores/project-selectors';
 import { taskManagerStoreToken } from '@core/features/tasks/contributions/browser/project-store-tokens';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
+import { getTaskComposition } from '@core/features/workbench/api/browser/task-composition-selectors';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
 import {
@@ -38,12 +47,20 @@ import {
   unregisteredTaskData,
 } from '@core/primitives/task-state/browser/task-state';
 
-/** The ticket whose PM session is this task, or null. Call from an `observer`. */
-function usePmTicket(taskId: string) {
-  useEffect(() => {
-    ticketsStore.ensureStarted();
-  }, []);
-  return ticketsStore.tickets.find((ticket) => ticket.pmSession === taskId) ?? null;
+/** The task's loaded conversations (empty when the renderer has not loaded them). */
+function taskConversations(taskId: string): TicketSessionConversation[] {
+  const manager = conversationRegistry.get(taskId);
+  if (!manager) return [];
+  return [...manager.conversations.values()].map((conversation) => ({
+    conversationId: conversation.data.id,
+    title: formatConversationTitleForDisplay(
+      conversation.data.providerId,
+      conversation.data.title ?? ''
+    ),
+    providerId: conversation.data.providerId,
+    model: conversation.data.model || null,
+    status: conversation.indicatorStatus,
+  }));
 }
 
 /** Every task in every open project, as the Sessions list needs it. Call from an `observer`. */
@@ -71,75 +88,63 @@ function allTasks(): TicketSessionTask[] {
           unregisteredTaskData(task)?.lastInteractedAt ??
           null,
         providerId: mainProviderId(taskConversationStats(task)),
+        conversations: taskConversations(task.data.id),
       });
     }
   }
   return rows;
 }
 
-/** The titlebar toggle for the Sessions tab. Shown only in a ticket's PM session. */
-export const OzdashSessionsSidebarToggle = observer(function OzdashSessionsSidebarToggle({
+/** The Sessions part of the Ticket tab. Call with the ticket of `taskId`. */
+export const TicketSessionsSection = observer(function TicketSessionsSection({
+  ticket,
   taskId,
 }: {
-  taskId: string;
-}) {
-  const ticket = usePmTicket(taskId);
-  if (!ticket) return null;
-  return (
-    <Tooltip.Root>
-      <Tooltip.Trigger
-        render={
-          <ToggleGroup.Item size="sm" icon value="sessions" aria-label="Sessions">
-            <ListTree className="size-3.5" />
-          </ToggleGroup.Item>
-        }
-      />
-      <Tooltip.Content>Sessions of ticket #{ticket.id}</Tooltip.Content>
-    </Tooltip.Root>
-  );
-});
-
-export const OzdashSessionsPanel = observer(function OzdashSessionsPanel({
-  taskId,
-}: {
+  ticket: Pick<TicketSummary, 'id' | 'pmSession' | 'searchText'>;
   taskId: string;
 }) {
   const { navigate } = useNavigate();
-  const ticket = usePmTicket(taskId);
   const tasks = allTasks();
   // Markers load per task as sidebar rows mount; read them again when the task set changes.
   const taskKey = tasks.map((task) => task.taskId).join(',');
   useEffect(() => {
     refreshTaskTickets();
   }, [taskKey]);
+  const rows = ticketSessionRows(ticket, tasks, taskTicketMarkers(), taskId);
 
-  if (!ticket) {
-    return <p className="p-3 text-xs text-foreground-passive">This task is not a PM session.</p>;
-  }
-  const sessions = selectTicketSessions(ticket, tasks, taskTicketMarkers());
+  const open = (row: TicketSessionRow, conversationId?: string) => {
+    // Select the conversation first (the palette does the same), then open the task.
+    const selectConversation = (): boolean => {
+      const composition = getTaskComposition(row.projectId, row.taskId);
+      if (!conversationId || !composition) return false;
+      composition.paneLayout.open('conversation', { conversationId }, { preview: false });
+      return true;
+    };
+    const selected = selectConversation();
+    navigate(taskViewDef({ projectId: row.projectId, taskId: row.taskId }));
+    // A task not opened yet has no composition before the navigation: try once more.
+    if (conversationId && !selected) requestAnimationFrame(() => void selectConversation());
+  };
 
   return (
-    <section
-      aria-label={`Sessions of ticket ${ticket.id}`}
-      className="flex h-full min-h-0 flex-col overflow-y-auto text-xs"
-    >
-      <div className="border-b border-border px-3 py-2 text-[11px] font-medium text-foreground-passive">
-        Ticket #{ticket.id} · {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
+    <section aria-label={`Sessions of ticket ${ticket.id}`} className="flex flex-col">
+      <div className="px-3 pt-1 text-[11px] font-medium text-foreground-passive">
+        Sessions · {rows.length}
       </div>
-      {sessions.length === 0 ? (
-        <p className="p-3 text-foreground-passive">No sessions for this ticket yet.</p>
+      {rows.length === 0 ? (
+        <p className="px-3 py-2 text-foreground-passive">No sessions for this ticket yet.</p>
       ) : (
         <ul className="flex flex-col gap-0.5 p-1.5">
-          {sessions.map((row) => (
+          {rows.map((row) => (
             <li key={row.taskId}>
               <button
                 type="button"
                 aria-label={`Open task ${row.name} in ${row.projectName}: ${sessionStatusLabel(row.status)}`}
-                onClick={() =>
-                  navigate(taskViewDef({ projectId: row.projectId, taskId: row.taskId }))
-                }
+                aria-current={row.current ? 'page' : undefined}
+                onClick={() => open(row)}
                 className={cn(
                   'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-background-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                  row.current && 'bg-background-2',
                   attentionRowClass(row.attention)
                 )}
               >
@@ -149,9 +154,17 @@ export const OzdashSessionsPanel = observer(function OzdashSessionsPanel({
                   <Bot className="size-4 shrink-0 text-foreground-passive" aria-hidden />
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-foreground">{row.name}</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    {row.role === 'pm' && (
+                      <span className="shrink-0 rounded bg-background-info px-1 text-[10px] font-semibold text-foreground-info">
+                        PM
+                      </span>
+                    )}
+                    <span className="truncate text-foreground">{row.name}</span>
+                  </span>
                   <span className="truncate text-[11px] text-foreground-passive">
                     {row.projectName} · {sessionStatusLabel(row.status)}
+                    {row.current && ' · this task'}
                   </span>
                 </span>
                 <AgentStatus status={row.status} size={16} tooltip />
@@ -163,6 +176,29 @@ export const OzdashSessionsPanel = observer(function OzdashSessionsPanel({
                   />
                 )}
               </button>
+              {listedConversations(row).length > 0 && (
+                <ul className="flex flex-col gap-0.5 pl-6">
+                  {listedConversations(row).map((conversation) => (
+                    <li key={conversation.conversationId}>
+                      <button
+                        type="button"
+                        aria-label={`Open conversation ${conversationLabel(conversation)}: ${sessionStatusLabel(conversation.status)}`}
+                        onClick={() => open(row, conversation.conversationId)}
+                        className="focus-visible:ring-ring flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] hover:bg-background-2 focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        <AgentIcon id={conversation.providerId} size={12} />
+                        <span className="min-w-0 flex-1 truncate text-foreground-muted">
+                          {conversationLabel(conversation)}
+                        </span>
+                        <span className="shrink-0 text-foreground-passive">
+                          {sessionStatusLabel(conversation.status)}
+                        </span>
+                        <AgentStatus status={conversation.status} size={12} tooltip />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

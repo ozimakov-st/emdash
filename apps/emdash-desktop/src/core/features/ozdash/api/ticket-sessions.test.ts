@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conversationLabel,
+  listedConversations,
   mainProviderId,
   selectTicketSessions,
   sessionSortGroup,
   sessionStatusLabel,
+  ticketByFileRef,
   ticketFileTaskIds,
+  ticketSessionRows,
+  type TicketSessionConversation,
   type TicketSessionTask,
 } from './ticket-sessions';
 
@@ -18,6 +23,7 @@ const task = (taskId: string, extra: Partial<TicketSessionTask> = {}): TicketSes
   attention: null,
   lastActivity: null,
   providerId: null,
+  conversations: [],
   ...extra,
 });
 
@@ -102,5 +108,77 @@ describe('sessionStatusLabel', () => {
   it('names each status; null is idle', () => {
     expect(sessionStatusLabel('awaiting-input')).toBe('Awaiting input');
     expect(sessionStatusLabel(null)).toBe('Idle');
+  });
+});
+
+const conversation = (
+  conversationId: string,
+  extra: Partial<TicketSessionConversation> = {}
+): TicketSessionConversation => ({
+  conversationId,
+  title: 'Claude (1)',
+  providerId: 'claude',
+  model: null,
+  status: null,
+  ...extra,
+});
+
+describe('ticketSessionRows', () => {
+  it('puts the PM session first, then the sorted peers, and marks the current task', () => {
+    const tasks = [
+      task('a', { lastActivity: '2026-11-01T00:00:00Z' }),
+      task('pm'),
+      task('b', { status: 'awaiting-input' }),
+    ];
+    const rows = ticketSessionRows(ticket(), tasks, marked(['a', '7'], ['b', '7']), 'a');
+    expect(rows.map((row) => [row.taskId, row.role, row.current])).toEqual([
+      ['pm', 'pm', false],
+      ['b', 'peer', false],
+      ['a', 'peer', true],
+    ]);
+  });
+
+  it('marks the PM row as current in the PM session; leaves out an archived PM', () => {
+    expect(ticketSessionRows(ticket(), [task('pm')], marked(), 'pm')).toMatchObject([
+      { taskId: 'pm', role: 'pm', current: true },
+    ]);
+    expect(ticketSessionRows(ticket(), [task('pm', { archived: true })], marked(), 'pm')).toEqual(
+      []
+    );
+  });
+});
+
+describe('ticketByFileRef', () => {
+  it('finds the ticket whose file names the task', () => {
+    const tickets = [
+      { id: '1', searchText: 'emdash: x' },
+      { id: '2', searchText: 'emdash: t-1 (fix)' },
+    ];
+    expect(ticketByFileRef('t-1', tickets)?.id).toBe('2');
+    expect(ticketByFileRef('nope', tickets)).toBeNull();
+  });
+});
+
+describe('listedConversations', () => {
+  it('lists conversations only when a task has two or more', () => {
+    expect(listedConversations({ conversations: [conversation('c1')] })).toEqual([]);
+    const two = [conversation('c1'), conversation('c2')];
+    expect(listedConversations({ conversations: two })).toEqual(two);
+  });
+});
+
+describe('conversationLabel', () => {
+  it('shows the title, the agent and the model', () => {
+    expect(conversationLabel({ title: 'executor', providerId: 'claude', model: 'opus' })).toBe(
+      'executor · claude opus'
+    );
+    expect(
+      conversationLabel({ title: 'Review', providerId: 'cursor', model: 'cursor-grok-4.6-high' })
+    ).toBe('Review · cursor cursor-grok-4.6-high');
+  });
+
+  it('shows only the agent when the title is empty or the same', () => {
+    expect(conversationLabel({ title: '', providerId: 'codex', model: null })).toBe('codex');
+    expect(conversationLabel({ title: 'Codex', providerId: 'codex', model: null })).toBe('codex');
   });
 });
