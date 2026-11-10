@@ -1,4 +1,5 @@
 import { useCallback, type ReactNode } from 'react';
+import { useApplyUiFont } from '@core/features/ozdash/contributions/browser';
 import { useAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import { applyThemeToAll } from '@core/features/terminals/api/browser/pty/pty';
 import { ThemeProvider as CoreThemeProvider } from '@core/primitives/theme/browser';
@@ -6,6 +7,7 @@ import { ThemeProvider as CoreThemeProvider } from '@core/primitives/theme/brows
 export function ThemeProvider({ children }: { readonly children: ReactNode }) {
   const { value, isLoading, update } = useAppSettingsKey('theme');
   const handleThemeApplied = useCallback(() => applyThemeToAll(), []);
+  useApplyUiFont(); // OZdash
 
   return (
     <CoreThemeProvider

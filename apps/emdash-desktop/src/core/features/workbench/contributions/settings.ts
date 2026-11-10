@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UI_FONT_DEFAULT, UI_FONT_IDS } from '@core/features/ozdash/api/ui-font';
 import { COMMAND_CATALOG } from '@core/manifests/shared/command-catalog';
 import type {
   InterfaceSettings,
@@ -31,6 +32,7 @@ const interfaceSettingsSchema = z.object({
   showLeftSidebarPrStatus: z.boolean(),
   showLeftSidebarTimestamps: z.boolean(),
   hideContextBar: z.boolean(),
+  uiFont: z.enum(UI_FONT_IDS).catch(UI_FONT_DEFAULT),
 });
 
 const themeSchema = z.enum(['emlight', 'emdark']).nullable().catch(null).optional().default(null);
@@ -63,6 +65,7 @@ export const interfaceSettingsContribution = defineSettingsContribution<
     showLeftSidebarPrStatus: true,
     showLeftSidebarTimestamps: true,
     hideContextBar: false,
+    uiFont: UI_FONT_DEFAULT,
   },
 });
 

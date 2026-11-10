@@ -55,6 +55,8 @@ export type InterfaceSettings = {
   showLeftSidebarPrStatus: boolean;
   showLeftSidebarTimestamps: boolean;
   hideContextBar: boolean;
+  /** OZdash: UI (sans-serif) font; see core/features/ozdash/api/ui-font.ts. */
+  uiFont: 'default' | 'geist' | 'system';
 };
 
 export type ProviderCustomConfig = {

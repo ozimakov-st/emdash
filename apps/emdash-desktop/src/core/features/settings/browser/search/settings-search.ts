@@ -248,6 +248,13 @@ export const SETTINGS_SEARCH_INDEX: SettingsSearchEntry[] = [
     keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'system'],
   },
   {
+    id: 'ui-font',
+    label: 'UI font',
+    tab: 'interface',
+    description: 'Font for the app interface.',
+    keywords: ['font family', 'typeface', 'geist', 'inter'],
+  },
+  {
     id: 'default-terminal-shell',
     label: 'Default terminal shell',
     tab: 'interface',

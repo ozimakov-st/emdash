@@ -1,4 +1,5 @@
 import { PageLayout, SettingsSection } from '@emdash/ui/react/patterns';
+import { UiFontSettingsCard } from '@core/features/ozdash/contributions/browser';
 import FilesSettingsCard from '../components/FilesSettingsCard';
 import HiddenToolsSettingsCard from '../components/HiddenToolsSettingsCard';
 import InterfaceSettingsCard from '../components/InterfaceSettingsCard';
@@ -18,6 +19,9 @@ export function InterfaceSettingsPage() {
       />
       <SettingsSection title="Color mode" bare>
         <ThemeCard />
+      </SettingsSection>
+      <SettingsSection title="Font" bare>
+        <UiFontSettingsCard />
       </SettingsSection>
       <SettingsSection title="Application icon">
         <TrayIconSettingsRow />
