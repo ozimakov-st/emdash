@@ -12,8 +12,8 @@ export type TerminalDrawerActiveItem = z.infer<typeof terminalDrawerActiveItemSc
 
 const taskChromeV1Schema = z.object({
   version: z.literal('1'),
-  // Fork (ozimakov-st): + 'ticket' (the OZdash Ticket panel).
-  sidebarTab: z.enum(['conversations', 'changes', 'files', 'ticket']),
+  // Fork (ozimakov-st): + 'ticket' (the OZdash Ticket panel), 'sessions' (its tasks).
+  sidebarTab: z.enum(['conversations', 'changes', 'files', 'ticket', 'sessions']),
   sidebarCollapsed: z.boolean(),
   terminalDrawerOpen: z.boolean(),
 });

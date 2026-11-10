@@ -126,6 +126,15 @@ describe('taskChromeStore sidebar commands', () => {
     expect(taskChromeSchema.parseJson(stored)).toEqual(store.state);
   });
 
+  it('the sessions tab (PM sessions) is stored like the other tabs', () => {
+    const store = createStore({ sidebarCollapsed: true, sidebarTab: 'ticket' });
+
+    store.commands.openSidebarTab('sessions');
+    expect(store.state).toMatchObject({ sidebarTab: 'sessions', sidebarCollapsed: false });
+    const stored = taskChromeSchema.serialize(store.state);
+    expect(taskChromeSchema.parseJson(stored)).toEqual(store.state);
+  });
+
   it('sidebar commands leave focusedRegion alone', () => {
     const store = createStore();
 

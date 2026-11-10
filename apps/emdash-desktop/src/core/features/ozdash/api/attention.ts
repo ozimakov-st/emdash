@@ -42,6 +42,17 @@ export function taskAttention(
   return level;
 }
 
+/**
+ * Row background for a task that needs attention (sidebar rows, the Sessions tab). The
+ * warning background (amber-3) is pale, so a low opacity of it does not show: 'input'
+ * uses it in full with an amber outline, 'done' uses it at 70%.
+ */
+export function attentionRowClass(level: AttentionLevel | null): string | false {
+  if (level === 'input') return 'bg-background-warning ring-1 ring-inset ring-border-warning';
+  if (level === 'done') return 'bg-background-warning/70';
+  return false;
+}
+
 export function countNeedingAttention(levels: Iterable<AttentionLevel | null>): number {
   let count = 0;
   for (const level of levels) if (level) count += 1;

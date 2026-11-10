@@ -36,6 +36,11 @@ export function refreshTaskTickets(): void {
     });
 }
 
+/** All known markers by task id (observable). Call from an `observer` component. */
+export function taskTicketMarkers(): ReadonlyMap<string, TaskTicketInfo> {
+  return infos;
+}
+
 /** The ticket marker of a task, or null. Call from an `observer` component. */
 export function useTaskTicketInfo(taskId: string): TaskTicketInfo | null {
   useEffect(() => {

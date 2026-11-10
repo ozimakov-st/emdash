@@ -30,6 +30,10 @@ generates missing `icon.svg` files in the background with the Claude CLI (haiku,
 tools, one at a time); turn this off with `OZDASH_TICKET_ICONS=off`.
 A task that is a ticket's PM session or child task gets a **Ticket** toggle in its
 titlebar (next to Changes / Files / Conversations): a right sidebar tab with the ticket.
+A PM session also gets a **Sessions** toggle: the ticket's tasks in all projects (ticket
+marker, or `emdash: <task id>` in the ticket file as `/oz-ticket-link` writes it; not the
+PM session, not archived), with agent, project, live status and last activity. Needs-input
+/ error rows come first (attention colors), then working, then the rest. Click opens the task.
 **Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
 (title, Goal, priority). Save rewrites only the changed fields in place (a new priority
 clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and
