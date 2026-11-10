@@ -190,7 +190,7 @@ const CreateTaskModalContent = observer(function CreateTaskModalContent({
                 {
                   value: 'conversation',
                   label: 'Initial Conversation',
-                  content: <ConversationField />,
+                  content: <ConversationField showAgentPresets />,
                 },
                 {
                   value: 'workspace',

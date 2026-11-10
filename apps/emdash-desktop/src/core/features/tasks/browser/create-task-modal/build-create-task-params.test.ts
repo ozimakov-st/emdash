@@ -39,6 +39,17 @@ function makeInitialConversationState(
 }
 
 describe('buildInitialConversation', () => {
+  it('passes a preset model and effort in terminal mode (fork)', () => {
+    const state = makeInitialConversationState(agent('codex'), true, {
+      model: 'gpt-6.1-sol',
+      effort: 'high',
+    });
+    expect(buildInitialConversation(state)).toEqual(
+      expect.objectContaining({ type: 'pty', model: 'gpt-6.1-sol', effort: 'high' })
+    );
+    expect(buildInitialConversation({ ...state, useChatUi: true })).not.toHaveProperty('effort');
+  });
+
   it('uses the draft auto-approve value for supported providers', () => {
     expect(buildInitialConversation(makeInitialConversationState(agent('claude'), true))).toEqual(
       expect.objectContaining({ provider: 'claude', autoApprove: true })

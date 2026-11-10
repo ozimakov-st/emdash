@@ -7,6 +7,8 @@ interface ConversationFieldProps {
   onPromptBlur?: () => void;
   showAutoApproveToggle?: boolean;
   requirePromptDelivery?: boolean;
+  /** Fork (ozimakov-st): show the agent palette chips. */
+  showAgentPresets?: boolean;
 }
 
 export function ConversationField({
@@ -15,6 +17,7 @@ export function ConversationField({
   onPromptBlur,
   requirePromptDelivery,
   showAutoApproveToggle,
+  showAgentPresets,
 }: ConversationFieldProps) {
   const { initialConversation, linkedIssue, includeIssueContextByDefault } = useTaskState();
 
@@ -28,6 +31,7 @@ export function ConversationField({
       onPromptBlur={onPromptBlur}
       requirePromptDelivery={requirePromptDelivery}
       showAutoApproveToggle={showAutoApproveToggle}
+      showAgentPresets={showAgentPresets}
     />
   );
 }

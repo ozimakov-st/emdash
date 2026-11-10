@@ -48,7 +48,13 @@ export function buildInitialConversation(
         ? { initialPrompt: buildFinalPrompt(state.issueContext, state.prompt) }
         : {}),
     autoApprove: state.autoApprove,
-    ...(type === 'acp' ? { options: state.options } : { model: state.model ?? undefined }),
+    ...(type === 'acp'
+      ? { options: state.options }
+      : {
+          model: state.model ?? undefined,
+          // Fork (ozimakov-st): effort from an agent preset.
+          ...(state.effort && { effort: state.effort }),
+        }),
     type,
   };
 }

@@ -34,6 +34,7 @@ import {
 } from '@core/features/conversations/contributions/browser/provider-composer-options';
 import { IntegrationIcon } from '@core/features/integrations/contributions/browser/integration-icon';
 import { usePromptLibrary } from '@core/features/library/api/browser/prompts/use-prompt-library';
+import { AgentPresetChips } from '@core/features/ozdash/contributions/browser';
 import { getProjectSshConnectionId } from '@core/features/projects/api/browser/stores/project-selectors';
 import { buildIssueContextText } from '@core/features/tasks/browser/context-bar/context-actions';
 import { appendInitialConversationText } from '@core/features/tasks/browser/create-task-modal/initial-conversation-text';
@@ -73,6 +74,13 @@ export type InitialConversationState = {
   flushSettings: () => Promise<void>;
   model: string | null;
   setModel: (model: string | null) => void;
+  /** Fork (ozimakov-st): reasoning effort from an agent preset (terminal mode only). */
+  effort?: string | null;
+  /**
+   * Fork (ozimakov-st): an agent palette chip. Sets provider, model and effort, and turns
+   * auto-approve on for that provider.
+   */
+  applyPreset?: (preset: AgentPresetSelection) => void;
   connectionId?: string;
   /** Whether to start this conversation as an ACP chat UI conversation. */
   useChatUi: boolean;
@@ -81,6 +89,13 @@ export type InitialConversationState = {
   initialPromptSupported: boolean;
   issueMentionContexts: Record<string, string>;
   setIssueMentionContext: (token: string, context: string | null) => void;
+};
+
+/** Fork (ozimakov-st): what an agent palette chip selects. */
+export type AgentPresetSelection = {
+  provider: AgentProviderId;
+  model: string | null;
+  effort: string | null;
 };
 
 interface InitialConversationStateOptions {
@@ -109,6 +124,10 @@ export function useInitialConversationState(
   );
   const [issueContextEditorOpen, setIssueContextEditorOpen] = useState(false);
   const [model, setModel] = useState<string | null>(null);
+  const [effort, setEffort] = useState<string | null>(null);
+  // A preset for another provider: applied once the provider switch lands (the switch
+  // itself resets model and effort).
+  const [pendingPreset, setPendingPreset] = useState<AgentPresetSelection | null>(null);
   const [draftOptions, setDraftOptions] = useState(options.initialOptions);
   const [issueMentionContexts, setIssueMentionContexts] = useState<Record<string, string>>({});
 
@@ -126,11 +145,16 @@ export function useInitialConversationState(
     setIssueContext(null);
     setIssueContextEditorOpen(false);
     setModel(null);
+    setEffort(null);
+    setPendingPreset(null);
     setDraftOptions(undefined);
     setIssueMentionContexts({});
   } else if (providerChanged) {
     setPrevProviderId(providerId);
-    setModel(null);
+    const pending = pendingPreset?.provider === providerId ? pendingPreset : null;
+    setModel(pending?.model ?? null);
+    setEffort(pending?.effort ?? null);
+    setPendingPreset(null);
     setDraftOptions(undefined);
   }
 
@@ -173,7 +197,32 @@ export function useInitialConversationState(
         });
     },
     model,
-    setModel,
+    setModel: (next) => {
+      setModel(next);
+      setEffort(null); // A hand-picked model drops the preset's effort.
+    },
+    effort,
+    applyPreset: (preset) => {
+      if (preset.provider === providerId) {
+        setModel(preset.model);
+        setEffort(preset.effort);
+      } else {
+        setPendingPreset(preset);
+        setProviderOverride(preset.provider);
+      }
+      // Presets name CLI models: they run in the terminal, not the chat UI.
+      if (useChatUi) launchSettings.setUseChatUi(false);
+      const target = agents?.find((agent) => agent.id === preset.provider);
+      if (agentSupportsAutoApprove(target?.capabilities, 'pty')) {
+        void patchProviderSettings(
+          {
+            host: formatHostRef(hostRefFromConnectionId(connectionId)),
+            providerId: preset.provider,
+          },
+          { transport: 'pty', autoApprove: true }
+        );
+      }
+    },
     connectionId,
     useChatUi,
     setUseChatUi: launchSettings.setUseChatUi,
@@ -232,6 +281,8 @@ interface InitialConversationFieldProps {
   textareaClassName?: string;
   showAutoApproveToggle?: boolean;
   requirePromptDelivery?: boolean;
+  /** Fork (ozimakov-st): show the agent palette chips (New Task dialog). */
+  showAgentPresets?: boolean;
 }
 
 export function InitialConversationField({
@@ -243,12 +294,18 @@ export function InitialConversationField({
   textareaClassName,
   showAutoApproveToggle = true,
   requirePromptDelivery = false,
+  showAgentPresets = false,
 }: InitialConversationFieldProps) {
   const autoApproveSwitchId = useId();
   const editorApiRef = useRef<PromptEditorRef | null>(null);
   const syncingEditorTextRef = useRef(false);
   const { value: promptLibrary } = usePromptLibrary();
-  const modelOptions = useModelOptions(state.provider, state.connectionId);
+  const listedModelOptions = useModelOptions(state.provider, state.connectionId);
+  // Fork (ozimakov-st): a preset may pick a model the plugin does not list; show it too.
+  const modelOptions =
+    listedModelOptions && state.model && !Object.hasOwn(listedModelOptions, state.model)
+      ? { ...listedModelOptions, [state.model]: { name: state.model } }
+      : listedModelOptions;
   const defaultIssueContext = useMemo(
     () => (linkedIssue ? buildIssueContextText(linkedIssue) : null),
     [linkedIssue]
@@ -292,6 +349,7 @@ export function InitialConversationField({
     ? agents?.find((agent) => agent.id === state.provider)
     : null;
   const capabilities = selectedAgent?.capabilities ?? null;
+  const knownProviders = useMemo(() => new Set(agents?.map((agent) => agent.id)), [agents]);
   const canToggleAutoApprove = agentSupportsAutoApprove(
     capabilities,
     state.useChatUi ? 'acp' : 'pty'
@@ -412,6 +470,16 @@ export function InitialConversationField({
         onBlur={onPromptBlur}
         {...(canDeliverInitialPrompt ? dropHandlers : {})}
       >
+        {showAgentPresets && state.applyPreset ? (
+          <AgentPresetChips
+            provider={state.provider}
+            model={state.model}
+            effort={state.effort ?? null}
+            knownProviders={knownProviders}
+            onPick={state.applyPreset}
+          />
+        ) : null}
+
         <AgentSelector
           value={state.provider}
           onChange={(provider) => state.setProvider(provider)}
