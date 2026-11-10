@@ -28,12 +28,24 @@ group (writes `rank:` 10, 20, 30…). Colors per priority: `ozdash/api/priority-
 Each ticket shows a pixel icon: its `icon.svg`, else a sprite made from its id. OZdash
 generates missing `icon.svg` files in the background with the Claude CLI (haiku, no
 tools, one at a time); turn this off with `OZDASH_TICKET_ICONS=off`.
-A task that is a ticket's PM session or child task gets a **Ticket** toggle in its
-titlebar (next to Changes / Files / Conversations): a right sidebar tab with the ticket.
-A PM session also gets a **Sessions** toggle: the ticket's tasks in all projects (ticket
-marker, or `emdash: <task id>` in the ticket file as `/oz-ticket-link` writes it; not the
-PM session, not archived), with agent, project, live status and last activity. Needs-input
-/ error rows come first (attention colors), then working, then the rest. Click opens the task.
+A task that is a ticket's PM session or child task (ticket marker, or `emdash: <task id>`
+in the ticket file as `/oz-ticket-link` writes it) gets a **Ticket** toggle in its titlebar
+(next to Changes / Files / Conversations): a right sidebar tab with the ticket in brief
+(icon, `#id`, P-chip, title, status, needs Oleg, Goal in 3 lines with Show more, next step,
+open questions count), then **Sessions**: the PM session first (`PM`), then the ticket's
+other tasks in all projects (not archived), with agent, project, live status and last
+activity; the current task says "this task". Needs-input / error rows come first (attention
+colors), then working, then the rest. A task with two or more conversations (executor,
+reviewers) lists them under its row (`title · agent model`, live status). Click opens the
+task, or the task with that conversation selected.
+**PM relay:** when a conversation in a ticket's task (not the PM session) becomes
+awaiting-input, completed or error, and stays so for 20 s, OZdash types one line into the
+ticket's PM session (marker `pmSessionId`, else the file's `pm_session`; only if it exists
+and is not archived), like MCP `send_task_message`: `[OZdash] Ticket #5 · <task>
+(<project>) · <conversation> is now <status>. Run: emdash-oz status <taskId> --conversation
+<id>`. Once per transition (working re-arms it). While the PM session is working the line
+waits, and goes out (several lines as one message) when it is not. Turn off with
+`OZDASH_PM_RELAY=off`. Rule: `ozdash/api/pm-relay.ts`; wiring: `main/host/ozdash-pm-relay.ts`.
 **Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
 (title, Goal, priority). Save rewrites only the changed fields in place (a new priority
 clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and

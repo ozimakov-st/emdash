@@ -69,7 +69,7 @@ Behavior:
   fresh `McpServer` is built per request
 - tools: `list_projects`, `add_project`, `list_tasks`, `create_task`, `rename_task`,
   `archive_task`, `delete_task`, `run_task_script`, `stop_task_script`, `send_task_message`,
-  `get_task_status`
+  `get_task_status`, `create_conversation` (fork)
 - `add_project` adds a local git repository, like the Add Project dialog's "open a folder"
   mode: it expands `~`, resolves the real path, calls the projects controller's
   `inspectProjectPath`, returns an existing project at that path with `created: false`,
@@ -92,7 +92,19 @@ Behavior:
   once), plus the hook-reported `lastAssistantMessage` when the provider has one; for
   ACP, the newest assistant message from the active turn, else from recent history. If
   the host cannot be reached, it still returns the task and conversations, with
-  `latestOutput: null` and a `note`.
+  `latestOutput: null` and a `note`. Fork (ozimakov-st): optional `conversationId` reads
+  `latestOutput` from that conversation (unknown id = tool error); each `conversations`
+  item also has `title` and `model` (PTY config model, else null).
+- fork (ozimakov-st): `create_conversation` `{ projectId, taskId, prompt, provider?, model?,
+  effort?, autoApprove? (default true), title? }` -> `{ conversationId, title, provider,
+  model, effort, autoApprove }` adds a terminal agent session to an existing task, in its
+  worktree (for example a reviewer next to the executor). It calls the same
+  `createConversation` operation as the task UI's "new conversation" (injected as
+  `createConversation` from `services.ts`), with create_task's provider / model / effort /
+  auto-approve rules (`resolveProvider`, `resolveModel`, `resolveEffort`,
+  `resolvePtyAutoApprove`). It refuses an archived task, a provider that cannot take a
+  prompt at launch, and a project the app does not hold open (the session would stop with
+  the tool's lease). Default title: `<Provider> (n)`.
 - neither tool opens a project attachment: releasing a lease the tool took itself could
   stop the very sessions it wants to reach. They reach the host through the runtime
   broker, so local and SSH workspaces work the same.
