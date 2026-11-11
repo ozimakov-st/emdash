@@ -1,15 +1,25 @@
 // Fork (ozimakov-st): `#<id>` badge on a PM project task that is some ticket's PM
 // session (its id is the ticket's `pm_session`), else a muted "no ticket" marker.
 // Uses the Tickets board's list. A small icon after the badge shows the ticket's state
-// (the board column), so tickets that need Oleg stand out.
+// (the board column), so tickets that need Oleg stand out. `OzdashPmSessionIcon` shows
+// the ticket's pixel icon in front of the row (the briefcase when there is no ticket).
 import { Tooltip } from '@emdash/ui/react/primitives';
-import { Archive, CircleAlert, CirclePlay, Hourglass, Pause, type LucideIcon } from 'lucide-react';
+import {
+  Archive,
+  Briefcase,
+  CircleAlert,
+  CirclePlay,
+  Hourglass,
+  Pause,
+  type LucideIcon,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import {
   pmTaskNeedsTicket,
   ticketForPmSession,
 } from '@core/features/ozdash/api/browser/tickets-store';
 import { ticketColumn, type TicketColumnId } from '@core/features/ozdash/api/tickets';
+import { TicketIcon } from '@core/features/ozdash/contributions/browser';
 import { cn } from '@core/primitives/styling/browser/cn';
 
 const STATE_ICON: Record<TicketColumnId, { icon: LucideIcon; label: string; className: string }> = {
@@ -54,4 +64,15 @@ export const OzdashPmSessionBadge = observer(function OzdashPmSessionBadge({
       <Tooltip.Content>{`Ticket #${ticket.id}: ${ticket.title} · ${state.label}`}</Tooltip.Content>
     </Tooltip.Root>
   );
+});
+
+/** The PM session row's icon: its ticket's pixel icon, or the briefcase without a ticket. */
+export const OzdashPmSessionIcon = observer(function OzdashPmSessionIcon({
+  taskId,
+}: {
+  taskId: string;
+}) {
+  const ticket = ticketForPmSession(taskId);
+  if (!ticket) return <Briefcase className="h-3.5 w-3.5 shrink-0 text-foreground-info" />;
+  return <TicketIcon ticket={ticket} size={16} />;
 });

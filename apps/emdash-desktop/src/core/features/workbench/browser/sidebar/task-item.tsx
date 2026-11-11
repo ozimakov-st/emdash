@@ -1,4 +1,3 @@
-import { Briefcase } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { taskAttentionLevel } from '@core/features/ozdash/api/browser/attention';
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
@@ -29,7 +28,7 @@ import { cn } from '@core/primitives/styling/browser/cn';
 import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
 import { OzdashAttentionIcon, ozdashAttentionRowClass } from './ozdash-attention';
-import { OzdashPmSessionBadge } from './ozdash-pm-session-badge';
+import { OzdashPmSessionBadge, OzdashPmSessionIcon } from './ozdash-pm-session-badge';
 import { ozdashPmManagedRowClass } from './ozdash-sidebar-focus';
 import { OzdashTicketMarker } from './ozdash-ticket-marker';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
@@ -134,7 +133,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           className="gap-1 overflow-hidden"
         >
           <OzdashAttentionIcon level={attention} />
-          {isPm && <Briefcase className="h-3.5 w-3.5 shrink-0 text-foreground-info" />}
+          {isPm && <OzdashPmSessionIcon taskId={taskId} />}
           {isPm && <OzdashPmSessionBadge taskId={taskId} />}
           <OzdashTicketMarker taskId={taskId} />
           <span
