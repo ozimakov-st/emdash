@@ -1,6 +1,7 @@
 // OZdash: fork-only UI state that survives restarts (see core/primitives/mementos).
 import { defineVersionedSchema } from '@emdash/core/primitives/versioned-schema/api';
 import { z } from 'zod';
+import { conversationSubject } from '@core/features/conversations/contributions/subject';
 import type { TicketPanelId } from '@core/features/ozdash/api/tickets';
 import { days, defineMemento } from '@core/primitives/mementos/api';
 import { appSubject } from '@core/primitives/subjects/api';
@@ -83,4 +84,23 @@ export const ozdashTicketSessionsMemento = defineMemento({
   // Archived tasks are hidden until "Show archived" is turned on.
   default: { version: '1' as const, showArchived: false },
   retention: { tier: 'persisted', maxAge: days(3650) },
+});
+
+const ozdashChatViewV1Schema = z.object({
+  version: z.literal('1'),
+  /** How this chat (ACP) conversation is shown; null = follow the global session mode. */
+  view: z.enum(['oz', 'emdash']).nullable(),
+});
+
+export const ozdashChatViewSchema = defineVersionedSchema()
+  .initial('1', ozdashChatViewV1Schema)
+  .build();
+
+/** Per chat conversation: OZ chat or Emdash chat (tab menu). */
+export const ozdashChatViewMemento = defineMemento({
+  id: 'ozdash.chat-view',
+  subject: conversationSubject,
+  schema: ozdashChatViewSchema,
+  default: { version: '1' as const, view: null },
+  retention: { tier: 'persisted', maxAge: days(365), maxEntries: 5_000 },
 });

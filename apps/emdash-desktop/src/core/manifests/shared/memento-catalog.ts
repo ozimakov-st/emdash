@@ -1,5 +1,6 @@
 import { acpDraftMemento } from '@core/features/conversations/contributions/mementos';
 import {
+  ozdashChatViewMemento,
   ozdashSidebarMemento,
   ozdashTicketSessionsMemento,
   ozdashTicketsBoardMemento,
@@ -48,6 +49,7 @@ export const mementoCatalog: readonly MementoCatalogEntry[] = [
   ozdashSidebarMemento, // OZdash
   ozdashTicketsBoardMemento, // OZdash
   ozdashTicketSessionsMemento, // OZdash
+  ozdashChatViewMemento, // OZdash
 ];
 
 export const mementoSweepPolicies = mementoCatalog.flatMap((definition) =>

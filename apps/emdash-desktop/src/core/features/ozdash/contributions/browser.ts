@@ -6,3 +6,5 @@ export { OzdashTicketPanel, OzdashTicketSidebarToggle } from '../browser/ticket-
 export { AgentPresetChips } from '../browser/agent-preset-chips';
 export { UiFontSettingsCard, useApplyUiFont } from '../browser/ui-font';
 export { SessionModeSettingsCard, useSessionMode } from '../browser/chat/session-mode-settings';
+export { OzChatHost } from '../browser/chat/oz-chat-host';
+export { chatTabCommands, terminalTabCommands } from '../browser/chat/chat-view';

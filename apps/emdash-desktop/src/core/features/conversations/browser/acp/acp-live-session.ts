@@ -1,4 +1,5 @@
 import {
+  agentStateSchema,
   initialSessionConfigState,
   planStateSchema,
   sessionUsageSchema,
@@ -94,6 +95,8 @@ export class AcpLiveSession {
   readonly plan: RemoteValueState<z.infer<typeof planStateSchema> | null>;
   readonly terminals: RemoteValueState<TerminalState[]>;
   readonly mcpServers: RemoteValueState<Array<z.infer<typeof sessionMcpServerSchema>>>;
+  /** Fork (ozimakov-st): subagents and background tasks (OZ chat shows them). */
+  readonly agents: RemoteValueState<Array<z.infer<typeof agentStateSchema>>>;
   private readonly scope = createScope({ label: 'acp-live-session' });
   private readonly terminalLogs = new Map<
     string,
@@ -151,6 +154,13 @@ export class AcpLiveSession {
       this.scope,
       []
     );
+    const agents = replicaValueState(
+      client.session.state(key, 'agents'),
+      z.array(agentStateSchema),
+      this.scope,
+      []
+    );
+    this.agents = agents;
     this.sessionState = state;
     this.config = config;
     this.usage = usage;
@@ -158,7 +168,7 @@ export class AcpLiveSession {
     this.terminals = terminals;
     this.mcpServers = mcpServers;
     this.refreshStates = async () => {
-      for (const ancillary of [config, usage, plan, terminals, mcpServers]) {
+      for (const ancillary of [config, usage, plan, terminals, mcpServers, agents]) {
         void ancillary.refresh().catch(() => {});
       }
       await state.refresh();

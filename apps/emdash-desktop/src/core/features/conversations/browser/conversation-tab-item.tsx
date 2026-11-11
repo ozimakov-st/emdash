@@ -1,7 +1,10 @@
 import { AgentStatus } from '@emdash/ui/react/components';
 import { observer } from 'mobx-react-lite';
+import { useAgentMetadata } from '@core/features/agents/api/browser/use-agent-metadata';
 import { AgentIcon } from '@core/features/agents/contributions/browser/agent-icon';
 import { formatConversationTitleForDisplay } from '@core/features/conversations/api/browser/conversation-title-utils';
+import { terminalTabCommands } from '@core/features/ozdash/contributions/browser';
+import { agentSupportsAcp } from '@core/primitives/agents/api';
 import { MAX_CONVERSATION_TITLE_LENGTH } from '@core/primitives/conversations/api';
 import type {
   TabBarItemProps,
@@ -21,6 +24,11 @@ export const ConversationTabBarItem = observer(function ConversationTabBarItem({
   const store = tab.resource.store;
   const title = formatConversationTitleForDisplay(store.data.providerId, store.data.title);
   const rawTitle = store.data.title ?? '';
+  // Fork (ozimakov-st): "New <agent> session in OZ chat / Emdash chat" in the tab menu.
+  const { data: agents } = useAgentMetadata();
+  const supportsChat = agentSupportsAcp(
+    agents?.find((agent) => agent.id === store.data.providerId)?.capabilities
+  );
 
   return (
     <GenericTabItem
@@ -42,6 +50,12 @@ export const ConversationTabBarItem = observer(function ConversationTabBarItem({
           shortcut: { commandId: 'workbench.tabRename' },
           run: () => host.requestRename(tab.tabId),
         },
+        ...terminalTabCommands({
+          projectId: store.data.projectId,
+          taskId: store.data.taskId,
+          providerId: store.data.providerId,
+          supportsChat,
+        }),
       ]}
       renameValue={rawTitle}
       renameMaxLength={MAX_CONVERSATION_TITLE_LENGTH}
