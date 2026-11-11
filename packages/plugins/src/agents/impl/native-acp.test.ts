@@ -22,7 +22,7 @@ const nativeAcpProviders: Array<{
   { id: 'cline', args: ['--acp'] },
   { id: 'codebuddy', args: ['--acp'] },
   { id: 'copilot', args: ['--acp'] },
-  { id: 'cursor', args: ['acp'] },
+  { id: 'cursor', args: ['-f', '--approve-mcps', 'acp'] }, // Fork (ozimakov-st): auto-approve
   { id: 'devin', args: ['acp'] },
   {
     id: 'droid',

@@ -20,6 +20,7 @@ import {
 } from '@core/features/conversations/api/node/registry';
 import { mapConversationRowToConversation } from '@core/features/conversations/api/node/utils';
 import type { ConversationsRuntimeBroker } from '@core/features/conversations/api/runtime-adapter';
+import { withAutoApproveMode } from '@core/features/ozdash/api/chat/acp-launch-options';
 import type { TaskSessionManager } from '@core/features/tasks/api/node/task-session-manager';
 import {
   buildPtyConversationConfig,
@@ -34,6 +35,10 @@ import type { AppDb } from '@core/services/app-db/node/db';
 import { appDbPokes } from '@core/services/app-db/node/pokes';
 import { tasks } from '@core/services/app-db/node/schema';
 import { launchTuiConversation } from './launch-tui-conversation';
+
+function withOptions(options: Record<string, string | boolean> | undefined) {
+  return options && Object.keys(options).length > 0 ? { options } : {};
+}
 
 type ConversationCreateDb = Pick<AppDb, 'delete' | 'insert' | 'select' | 'update'>;
 
@@ -98,7 +103,9 @@ export async function createConversation(
       ? {
           version: '1',
           type: 'acp',
-          ...(params.options && { options: params.options }),
+          // Fork (ozimakov-st): OZdash chat sessions run without permission prompts unless
+          // a mode was chosen. (`autoApprove` is a terminal flag; for ACP it is always false.)
+          ...withOptions(withAutoApproveMode(params.provider, params.options)),
           ...(initialQueue?.length && { initialQueue }),
         }
       : // Fork (ozimakov-st): shared builder, keeps model and reasoning effort.

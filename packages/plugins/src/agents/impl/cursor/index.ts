@@ -97,7 +97,10 @@ export const plugin = definePlugin(
 
 export const provider = registerPluginBehavior(plugin, {
   acp: createNativeAcpBehavior(() => ({
-    args: ['acp'],
+    // Fork (ozimakov-st): `-f` makes cursor's ACP server approve every tool call (it has no
+    // ACP permission mode), and `--approve-mcps` its MCP servers. Both are root options, so
+    // they go before the subcommand.
+    args: ['-f', '--approve-mcps', 'acp'],
   })),
   prompt: {
     buildCommand: (ctx) =>

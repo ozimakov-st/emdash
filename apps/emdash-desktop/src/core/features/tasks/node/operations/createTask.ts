@@ -17,6 +17,7 @@ import {
 } from '@core/features/conversations/api/node/registry';
 import { mapConversationRowToConversation } from '@core/features/conversations/api/node/utils';
 import type { ConversationsRuntimeBroker } from '@core/features/conversations/api/runtime-adapter';
+import { withAutoApproveMode } from '@core/features/ozdash/api/chat/acp-launch-options';
 import {
   PROJECT_LIVE_ACCESS_REQUIRED_MESSAGE,
   type ProjectAttachmentError,
@@ -265,7 +266,9 @@ export async function prepareCreateTask(
         ? {
             version: '1',
             type: 'acp',
-            ...(ic.options && { options: ic.options }),
+            // Fork (ozimakov-st): OZdash chat sessions run without permission prompts unless
+            // a mode was chosen. (`autoApprove` is a terminal flag; for ACP it is always false.)
+            ...withOzOptions(withAutoApproveMode(ic.provider, ic.options)),
             ...(ic.autoApprove !== undefined && { autoApprove: ic.autoApprove }),
             ...(initialQueue?.length && { initialQueue }),
             ...(ic.model && { model: ic.model }),
@@ -504,4 +507,9 @@ function allocateRegistryPath(
     if (tombstoned) return err(tombstoned);
     if (!registry.findLiveByPath(location, sshConnectionId, candidate)) return ok(candidate);
   }
+}
+
+/** Fork (ozimakov-st): an `options` field only when there are options. */
+function withOzOptions(options: Record<string, string | boolean> | undefined) {
+  return options && Object.keys(options).length > 0 ? { options } : {};
 }
