@@ -11,6 +11,8 @@ import type { Logger } from '@emdash/shared/logger';
 import { eq } from 'drizzle-orm';
 import { Notification, shell } from 'electron';
 import { getPluginMetadata } from '@core/features/agents/api/node/plugin-registry';
+import { isMutedPmTask, mutePmTasksEnabled } from '@core/features/mcp/api/ozdash-task-ticket';
+import type { TaskTicketStore } from '@core/features/mcp/node/server/ozdash-task-ticket-store';
 import {
   bannerBody,
   createAttentionChimeTracker,
@@ -57,6 +59,8 @@ export type OzdashAttentionChimeDeps = {
   describe(event: AgentEvent): Promise<string>;
   /** Opens the task in the renderer (after the window is focused). */
   openTask(event: AgentEvent): void;
+  /** True for a PM-managed task (isMutedPmTask): no chime, no banner. */
+  isMuted?(event: AgentEvent): Promise<boolean>;
   logger: Pick<Logger, 'warn'>;
   tracker?: AttentionChimeTracker;
   playSound?(settings: NotificationSettings): void;
@@ -94,6 +98,8 @@ export function attachAttentionChime(deps: OzdashAttentionChimeDeps): () => void
     });
 
   const announce = async (event: AgentEvent, transition: AttentionTransition) => {
+    // A PM-managed task reports to its PM session (pm-relay), not to Oleg.
+    if (await deps.isMuted?.(event)) return;
     const settings = await deps.settings.get('notifications');
     const routing = tracker.route(settings, deps.isAppFocused());
     if (routing.sound) playSound(settings);
@@ -122,13 +128,17 @@ export function installOzdashAttentionChime(
   agentStatus: Pick<AgentStatusService, 'on'>,
   settings: OzdashAttentionChimeDeps['settings'],
   notifications: Pick<NotificationService, 'emitDelivery'>,
+  taskTickets: Pick<TaskTicketStore, 'get'>,
   logger: Pick<Logger, 'warn'>
 ): () => void {
+  const mutePmTasks = mutePmTasksEnabled(process.env);
   return attachAttentionChime({
     onAgentEvent: (handler) => agentStatus.on('agent:event', handler),
     settings,
     isAppFocused,
     describe: (event) => describeAgentEvent(db, event),
+    isMuted: async (event) =>
+      isMutedPmTask(event.taskId, await taskTickets.get(event.taskId), mutePmTasks),
     openTask: (event) =>
       notifications.emitDelivery({
         type: 'open',

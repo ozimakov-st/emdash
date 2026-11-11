@@ -64,7 +64,10 @@ import {
   type PromptLibraryKV,
 } from '@core/features/library/node/prompt-library-service';
 import { LocalSettingsSync } from '@core/features/machines/node/local-settings-sync';
-import { OZDASH_TASK_TICKETS_CHANNEL } from '@core/features/mcp/api/ozdash-task-ticket';
+import {
+  mutePmTasksEnabled,
+  OZDASH_TASK_TICKETS_CHANNEL,
+} from '@core/features/mcp/api/ozdash-task-ticket';
 import {
   createEmdashMcpServer,
   type EmdashMcpServerHandle,
@@ -933,7 +936,7 @@ export async function bootServices(
   });
   ipcMain.handle(OZDASH_TASK_TICKETS_CHANNEL, async () => {
     await ticketsMigrated;
-    return taskTicketStore.listInfos();
+    return taskTicketStore.listInfos(Date.now(), mutePmTasksEnabled(process.env));
   });
   appScope.add(() => ipcMain.removeHandler(OZDASH_TASK_TICKETS_CHANNEL));
   // Fork (ozimakov-st): the Tickets board (see main/host/ozdash-tickets.ts).
@@ -958,6 +961,7 @@ export async function bootServices(
       agentStatusService,
       appSettingsService,
       notificationService,
+      taskTicketStore,
       log
     )
   );

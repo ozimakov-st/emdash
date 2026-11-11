@@ -2,7 +2,11 @@ import type { Logger } from '@emdash/shared/logger';
 // Fork (ozimakov-st): stores the `ticket` of tasks created through MCP. Uses the
 // existing `kv` table (namespace below, keyed by Emdash task id), so no migration.
 import { inArray } from 'drizzle-orm';
-import type { TaskTicket, TaskTicketInfo } from '@core/features/mcp/api/ozdash-task-ticket';
+import {
+  isMutedPmTask,
+  type TaskTicket,
+  type TaskTicketInfo,
+} from '@core/features/mcp/api/ozdash-task-ticket';
 import type { AppDb } from '@core/services/app-db/node/db';
 import { AppDbKeyValueStore } from '@core/services/app-db/node/key-value-store';
 import { kv, tasks } from '@core/services/app-db/node/schema';
@@ -24,20 +28,24 @@ export interface TaskTicketStore {
   /** Throws when the write fails. */
   set(taskId: string, ticket: TaskTicket): Promise<void>;
   delete(taskId: string): Promise<void>;
-  /** Every entry, for the renderer, with its PM session resolved; prunes deleted tasks. */
-  listInfos(now?: number): Promise<Record<string, TaskTicketInfo>>;
+  /**
+   * Every entry, for the renderer, with its PM session resolved; prunes deleted tasks.
+   * `mutePmTasks` (default true) sets `muted` on PM-managed tasks.
+   */
+  listInfos(now?: number, mutePmTasks?: boolean): Promise<Record<string, TaskTicketInfo>>;
   /** Moves entries from the old `ozdash-pm-task` namespace. Returns how many moved. */
   migrateLegacyEntries(): Promise<number>;
 }
 
 function toTaskTicket(value: unknown): TaskTicket | null {
   if (!value || typeof value !== 'object') return null;
-  const { id, title, pmSessionId } = value as Partial<StoredTaskTicket>;
+  const { id, title, pmSessionId, createdBy } = value as Partial<StoredTaskTicket>;
   if (typeof id !== 'string' || !id) return null;
   return {
     id,
     ...(typeof title === 'string' && title && { title }),
     ...(typeof pmSessionId === 'string' && pmSessionId && { pmSessionId }),
+    ...((createdBy === 'pm' || createdBy === 'oleg') && { createdBy }),
   };
 }
 
@@ -87,7 +95,7 @@ export function createTaskTicketStore(db: AppDb, logger: Logger): TaskTicketStor
       await kvStore.del(taskId);
     },
 
-    async listInfos(now = Date.now()) {
+    async listInfos(now = Date.now(), mutePmTasks = true) {
       const entries = await kvStore.getAll();
       const taskIds = Object.keys(entries);
       if (taskIds.length === 0) return {};
@@ -120,6 +128,7 @@ export function createTaskTicketStore(db: AppDb, logger: Logger): TaskTicketStor
           pmSession: pmSession
             ? { taskId: pmSession.id, projectId: pmSession.projectId, name: pmSession.name }
             : null,
+          muted: isMutedPmTask(taskId, ticket, mutePmTasks),
         };
       }
       return infos;

@@ -65,6 +65,8 @@ export async function linkTicketTask(
       id: input.ticketId,
       ...(ticket?.title && { title: ticket.title.slice(0, 200) }),
       ...(ticket?.pmSession && { pmSessionId: ticket.pmSession.slice(0, 64) }),
+      // Oleg made this task himself: it keeps notifying him (isMutedPmTask).
+      createdBy: 'oleg',
     });
   } catch (error) {
     warnings.push(`The task was not marked with the ticket: ${String(error)}`);

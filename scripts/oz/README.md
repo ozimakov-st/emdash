@@ -55,6 +55,15 @@ transition (working re-arms it). Mode `OZDASH_PM_RELAY`:
   `send_task_message`; while the PM is working the line waits (several go out as one message).
 - `off` (or `0`, `false`, `no`): nothing.
 Rule: `ozdash/api/pm-relay.ts`; wiring: `main/host/ozdash-pm-relay.ts`.
+**PM-managed tasks do not notify Oleg.** A task a PM session made with MCP `create_task`
+(`ticket` marker with `createdBy: "pm"`), with all its conversations (reviewers from
+`create_conversation` too), gives no chime, no macOS banner, no amber row or bell, no Dock
+badge count and no project count. It reports to its PM session only (PM relay above). In
+the Ticket tab's Sessions list it keeps its live status, without the amber highlight.
+Tasks Oleg makes himself (in a repo, or "New task…" / OZ Tickets, marker
+`createdBy: "oleg"`) and PM sessions keep notifying. Old markers without `createdBy` count
+as PM-made when they name a PM session (`pmSessionId`). `OZDASH_MUTE_PM_TASKS=off` turns
+this off. Rule: `isMutedPmTask` in `mcp/api/ozdash-task-ticket.ts`.
 **Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
 (title, Goal, priority). Save rewrites only the changed fields in place (a new priority
 clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and

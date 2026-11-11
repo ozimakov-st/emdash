@@ -41,6 +41,17 @@ export function taskTicketMarkers(): ReadonlyMap<string, TaskTicketInfo> {
   return infos;
 }
 
+/** Reads the markers again when one of `taskIds` was not seen before (its marker may be new). */
+export function ensureTaskTickets(taskIds: Iterable<string>): void {
+  let fresh = false;
+  for (const taskId of taskIds) {
+    if (seen.has(taskId)) continue;
+    seen.add(taskId);
+    fresh = true;
+  }
+  if (fresh) refreshTaskTickets();
+}
+
 /** The ticket marker of a task, or null. Call from an `observer` component. */
 export function useTaskTicketInfo(taskId: string): TaskTicketInfo | null {
   useEffect(() => {

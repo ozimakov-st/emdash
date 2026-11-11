@@ -28,10 +28,15 @@ export const ticketInputSchema = z.object({
     .describe('The Emdash task id of the PM session that controls this task'),
 });
 
+/** Who made the task: a PM session (MCP create_task) or Oleg (New Task dialog, OZ ticket). */
+export type TaskTicketOrigin = 'pm' | 'oleg';
+
 export type TaskTicket = {
   id: string;
   title?: string;
   pmSessionId?: string;
+  /** Not part of the create_task input; set by the code path that saves the marker. */
+  createdBy?: TaskTicketOrigin;
 };
 
 /** What the renderer gets for one ticket-controlled task. */
@@ -39,7 +44,37 @@ export type TaskTicketInfo = {
   ticket: TaskTicket;
   /** The PM session task, when `pmSessionId` points to a task that still exists. */
   pmSession: { taskId: string; projectId: string; name: string } | null;
+  /** The task talks to its PM session only: no attention marks for Oleg (`isMutedPmTask`). */
+  muted: boolean;
 };
+
+/**
+ * True for a task that a ticket's PM session manages: its marker says a PM session made
+ * it (MCP create_task). Markers saved before `createdBy` existed count as PM-made when
+ * they name a PM session. The PM session itself is never PM-managed.
+ */
+export function isPmManagedTask(taskId: string, ticket: TaskTicket | null | undefined): boolean {
+  if (!ticket || ticket.pmSessionId === taskId) return false;
+  if (ticket.createdBy) return ticket.createdBy === 'pm';
+  return !!ticket.pmSessionId;
+}
+
+/** `OZDASH_MUTE_PM_TASKS=off` turns muting off (PM-managed tasks notify Oleg again). */
+export function mutePmTasksEnabled(env: Record<string, string | undefined>): boolean {
+  return env.OZDASH_MUTE_PM_TASKS?.trim().toLowerCase() !== 'off';
+}
+
+/**
+ * The one rule for Oleg's attention signals (chime, banner, amber row, Dock badge,
+ * project count): a PM-managed task talks to its PM session only, so it gives none.
+ */
+export function isMutedPmTask(
+  taskId: string,
+  ticket: TaskTicket | null | undefined,
+  mutePmTasks: boolean
+): boolean {
+  return mutePmTasks && isPmManagedTask(taskId, ticket);
+}
 
 /** Main-process invoke channel: returns `Record<emdashTaskId, TaskTicketInfo>`. */
 export const OZDASH_TASK_TICKETS_CHANNEL = 'ozdash:list-task-tickets';

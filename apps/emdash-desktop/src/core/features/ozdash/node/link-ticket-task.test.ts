@@ -127,7 +127,7 @@ describe('linkTicketTask', () => {
     const result = await linkTicketTask(deps, INPUT);
     expect(result).toEqual({ success: true, pmNotified: true, warnings: [] });
     expect(deps.calls).toEqual([
-      'marker child-1 {"id":"12","title":"Add SCIM sync","pmSessionId":"pm-task"}',
+      'marker child-1 {"id":"12","title":"Add SCIM sync","pmSessionId":"pm-task","createdBy":"oleg"}',
       'link 12-add-scim scim-sync token-server "Add the endpoint"',
     ]);
     expect(send).toHaveBeenCalledWith({
@@ -176,7 +176,7 @@ describe('linkTicketTask', () => {
     const deps = dependencies();
     const result = await linkTicketTask(deps, { ...INPUT, ticketId: '99' });
     expect(result).toEqual({ success: false, error: 'Ticket #99 was not found in the vault' });
-    expect(deps.calls).toEqual(['marker child-1 {"id":"99"}']);
+    expect(deps.calls).toEqual(['marker child-1 {"id":"99","createdBy":"oleg"}']);
   });
 
   it('uses the project id when the project name is unknown', async () => {

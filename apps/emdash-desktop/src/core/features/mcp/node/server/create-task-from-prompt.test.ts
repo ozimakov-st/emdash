@@ -384,7 +384,11 @@ describe('createTaskFromPrompt ticket (fork)', () => {
     if (!result.success) return;
     const ticket = { id: '123', title: 'Fix login', pmSessionId: 'task-pm' };
     expect(result.data.ticket).toEqual(ticket);
-    expect(taskTickets.set).toHaveBeenCalledWith(result.data.taskId, ticket);
+    // Stored with its origin: a PM-made task is muted for Oleg (isMutedPmTask).
+    expect(taskTickets.set).toHaveBeenCalledWith(result.data.taskId, {
+      ...ticket,
+      createdBy: 'pm',
+    });
     expect(events).toEqual([`set:${result.data.taskId}`, `create:${result.data.taskId}`]);
   });
 

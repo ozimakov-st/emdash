@@ -26,7 +26,10 @@ function agentEvent(type: AgentEvent['type'], payload: AgentEvent['payload'] = {
   };
 }
 
-function setup(current: NotificationSettings = settings) {
+function setup(
+  current: NotificationSettings = settings,
+  isMuted?: (event: AgentEvent) => Promise<boolean>
+) {
   let emit: (event: AgentEvent) => void = () => {};
   const playSound = vi.fn();
   const showBanner = vi.fn();
@@ -42,6 +45,7 @@ function setup(current: NotificationSettings = settings) {
     logger: { warn: vi.fn() },
     playSound,
     showBanner,
+    ...(isMuted && { isMuted }),
   });
   return { emit: (event: AgentEvent) => emit(event), playSound, showBanner, dispose };
 }
@@ -60,6 +64,28 @@ describe('attachAttentionChime', () => {
       'Claude Code - attention-test',
       { level: 'input', status: 'awaiting-input' }
     );
+  });
+
+  it('stays quiet for a muted (PM-managed) task, its reviewer conversations too', async () => {
+    const muted = new Set(['pm-child']);
+    const { emit, playSound, showBanner } = setup(settings, async (event) =>
+      muted.has(event.taskId)
+    );
+    const inTask = (taskId: string, conversationId: string, type: AgentEvent['type']) => ({
+      ...agentEvent(type),
+      taskId,
+      conversationId,
+    });
+    emit(inTask('pm-child', 'executor', 'stop'));
+    emit(inTask('pm-child', 'reviewer', 'error'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(playSound).not.toHaveBeenCalled();
+    expect(showBanner).not.toHaveBeenCalled();
+
+    // Oleg's own repo task (no marker) still chimes.
+    emit(inTask('oleg-task', 'conversation-1', 'stop'));
+    await vi.waitFor(() => expect(showBanner).toHaveBeenCalledTimes(1));
+    expect(playSound).toHaveBeenCalledTimes(1);
   });
 
   it('stays quiet when notifications are off', async () => {

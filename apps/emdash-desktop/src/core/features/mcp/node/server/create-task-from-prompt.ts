@@ -377,7 +377,8 @@ export async function createTaskFromPrompt(
       };
 
       // Saved before the task row exists, so the sidebar never sees the task unmarked.
-      if (ticket) await taskTicketStoreOf(dependencies).set(taskId, ticket);
+      // `createdBy: 'pm'`: a PM-managed task, it does not notify Oleg (isMutedPmTask).
+      if (ticket) await taskTicketStoreOf(dependencies).set(taskId, { ...ticket, createdBy: 'pm' });
       const result = await dependencies.tasks.createTask(params);
       if (!result.success) {
         if (ticket) await taskTicketStoreOf(dependencies).delete(taskId);

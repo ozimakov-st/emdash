@@ -52,15 +52,30 @@ describe('task ticket store', () => {
 
   it('lists entries with their PM session for the renderer', async () => {
     await store.set('child-1', { id: '123', title: 'Fix login', pmSessionId: 'pm-1' });
-    await store.set('child-2', { id: '9', pmSessionId: 'gone' });
+    await store.set('child-2', { id: '9', pmSessionId: 'gone', createdBy: 'oleg' });
 
     expect(await store.listInfos()).toEqual({
       'child-1': {
         ticket: { id: '123', title: 'Fix login', pmSessionId: 'pm-1' },
         pmSession: { taskId: 'pm-1', projectId: 'work', name: 'PM 123' },
+        // Legacy marker (no createdBy) with a PM session: PM-managed.
+        muted: true,
       },
-      'child-2': { ticket: { id: '9', pmSessionId: 'gone' }, pmSession: null },
+      'child-2': {
+        ticket: { id: '9', pmSessionId: 'gone', createdBy: 'oleg' },
+        pmSession: null,
+        muted: false,
+      },
     });
+    // OZDASH_MUTE_PM_TASKS=off
+    expect((await store.listInfos(Date.now(), false))['child-1']?.muted).toBe(false);
+  });
+
+  it('keeps the origin and drops an unknown one', async () => {
+    await store.set('child-1', { id: '1', pmSessionId: 'pm-1', createdBy: 'pm' });
+    await store.set('child-2', { id: '2', createdBy: 'robot' as never });
+    expect(await store.get('child-1')).toEqual({ id: '1', pmSessionId: 'pm-1', createdBy: 'pm' });
+    expect(await store.get('child-2')).toEqual({ id: '2' });
   });
 
   it('prunes entries of deleted tasks once their grace period is over', async () => {
