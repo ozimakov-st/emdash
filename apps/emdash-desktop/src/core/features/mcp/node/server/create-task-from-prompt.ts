@@ -11,6 +11,14 @@ import { DEFAULT_AGENT_ID } from '@core/features/agents/contributions/settings';
 import type { ProviderSettingsSnapshot } from '@core/features/conversations/api/provider-settings';
 import { parseTaskTicket, type TaskTicket } from '@core/features/mcp/api/ozdash-task-ticket';
 import {
+  ozAcpConversationOptions,
+  presetToAcpOptions,
+} from '@core/features/ozdash/api/chat/acp-launch-options';
+import {
+  normalizeSessionMode,
+  resolveMcpTransport,
+} from '@core/features/ozdash/api/chat/session-mode';
+import {
   generateRandom,
   generateTaskName,
 } from '@core/features/tasks/api/node/name-generation/generateTaskName';
@@ -33,6 +41,10 @@ export type McpCreateTaskInput = {
   effort?: string;
   branchName?: string;
   baseBranch?: string;
+  /**
+   * Fork (ozimakov-st): true = chat (ACP), false = terminal. Omitted = the global session
+   * mode (Settings → Interface, default OZ chat).
+   */
   chatUi?: boolean;
   /** Fork (ozimakov-st): defaults to true (no permission prompts), not the saved setting. */
   autoApprove?: boolean;
@@ -65,6 +77,8 @@ export type McpCreateTaskResult = {
   workspacePath: string;
   /** Set when the task exists but its agent was not started. */
   warning?: string;
+  /** Fork (ozimakov-st): e.g. that a chat session fell back to the terminal. */
+  note?: string;
   /** Fork (ozimakov-st): the ticket passed to create_task, or null. */
   ticket: TaskTicket | null;
 };
@@ -98,7 +112,10 @@ async function resolveLaunchSettings(
   input: McpCreateTaskInput,
   model: string | undefined
 ): Promise<
-  Result<{ autoApprove: boolean; options?: ProviderSettingsSnapshot['acp']['options'] }, string>
+  Result<
+    { autoApprove: boolean; options?: undefined } | ReturnType<typeof resolveAcpLaunch>,
+    string
+  >
 > {
   const settings = await dependencies.readProviderSettings({
     host: formatHostRef(host),
@@ -107,22 +124,57 @@ async function resolveLaunchSettings(
   if (conversationType === 'pty') {
     return ok({ autoApprove: resolvePtyAutoApprove(provider, input.autoApprove) });
   }
+  return ok(resolveAcpLaunch(provider, settings, input, model));
+}
 
-  const options = { ...settings.acp.options };
-  if (model) {
-    const modelOption = settings.catalogs
-      .flat()
-      .find((option) => option.category === 'model' && option.type === 'select');
-    if (!modelOption) {
-      return err(
-        "Emdash has not discovered this provider's ACP model setting yet. Open a chat " +
-          'conversation with this provider first, or omit model to use its saved settings.'
-      );
-    }
-    options[modelOption.id] = model;
-  }
-  // ACP permissions are native provider options, not the terminal auto-approve flag.
-  return ok({ autoApprove: false, options });
+/**
+ * Fork (ozimakov-st): chat (ACP) launch options. Permissions, model and effort are the
+ * agent's own config options there: the preset's model and effort are matched against the
+ * cached option catalog (or go to the known option ids), and the permission mode follows
+ * `autoApprove` (default on). cursor's chat process always runs with `-f`.
+ */
+export function resolveAcpLaunch(
+  provider: AgentProviderId,
+  settings: ProviderSettingsSnapshot,
+  input: Pick<McpCreateTaskInput, 'autoApprove' | 'effort'>,
+  model: string | undefined
+): {
+  autoApprove: boolean;
+  options: ProviderSettingsSnapshot['acp']['options'];
+  model: string | null;
+  effort: string | null;
+} {
+  const preset = presetToAcpOptions(
+    provider,
+    { model: model ?? null, effort: input.effort ?? null },
+    settings.catalogs,
+    settings.acp.options
+  );
+  const options =
+    ozAcpConversationOptions(provider, preset.options, input.autoApprove) ?? preset.options;
+  return {
+    autoApprove: input.autoApprove !== false || provider === 'cursor',
+    options,
+    model: preset.model,
+    effort: preset.effort,
+  };
+}
+
+/** Fork (ozimakov-st): chat or terminal for an MCP-created session (see session-mode.ts). */
+export async function resolveMcpConversationType(
+  appSettings: AppSettingsService,
+  provider: AgentProviderId,
+  chatUi: boolean | undefined
+): Promise<{ type: 'pty' | 'acp'; note?: string }> {
+  const mode = normalizeSessionMode((await appSettings.get('interface')).sessionMode);
+  const supportsAcp = getPlugin(provider).capabilities.acp.kind === 'supported';
+  const resolved = resolveMcpTransport(chatUi, mode, supportsAcp);
+  return resolved.fellBack
+    ? {
+        type: resolved.type,
+        note: `${provider} has no chat mode, so the session runs in the terminal.`,
+      }
+    : { type: resolved.type };
 }
 
 /**
@@ -247,13 +299,13 @@ export async function createTaskFromPrompt(
   // since the preset would otherwise read an absent value as "push".
   const pushBranch = (await appSettings.get('project')).pushOnCreate ?? true;
 
-  // MCP keeps terminal mode as its default; chat UI requires an ACP-capable provider.
+  // Fork (ozimakov-st): chat or terminal follows the global session mode unless `chatUi`
+  // is passed; a provider without chat support falls back to the terminal.
   const capabilities = provider ? getPlugin(provider).capabilities : null;
-  const conversationType: 'pty' | 'acp' | 'none' = !provider
-    ? 'none'
-    : (input.chatUi ?? false) && capabilities?.acp.kind === 'supported'
-      ? 'acp'
-      : 'pty';
+  const transport = provider
+    ? await resolveMcpConversationType(appSettings, provider, input.chatUi)
+    : null;
+  const conversationType: 'pty' | 'acp' | 'none' = transport?.type ?? 'none';
   // Some terminal providers take no prompt at launch ('pty-only'), so the new-task modal
   // leaves it out. MCP has no one to type it later, so refuse before anything is created.
   const promptKind = capabilities?.prompt.kind;
@@ -266,6 +318,8 @@ export async function createTaskFromPrompt(
     );
   }
   let autoApprove: boolean | null = null;
+  let acpModel: string | undefined;
+  let acpEffort: string | undefined;
   const conversationId = randomUUID();
   const taskId = randomUUID();
 
@@ -295,6 +349,10 @@ export async function createTaskFromPrompt(
         if (!launchSettings.success) return launchSettings;
         autoApprove = launchSettings.data.autoApprove;
         providerOptions = launchSettings.data.options;
+        if ('effort' in launchSettings.data) {
+          acpModel = launchSettings.data.model ?? undefined;
+          acpEffort = launchSettings.data.effort ?? undefined;
+        }
       }
 
       const params: CreateTaskParams = {
@@ -362,12 +420,13 @@ export async function createTaskFromPrompt(
     taskName,
     branchName,
     provider,
-    model: model ?? null,
-    effort: conversationType === 'pty' ? (effort ?? null) : null,
+    model: (conversationType === 'acp' ? acpModel : model) ?? null,
+    effort: (conversationType === 'acp' ? acpEffort : effort) ?? null,
     conversationType,
     autoApprove,
     workspacePath: created.data.path,
     ...(created.data.warning && { warning: created.data.warning }),
+    ...(transport?.note && { note: transport.note }),
     ticket,
   });
 }

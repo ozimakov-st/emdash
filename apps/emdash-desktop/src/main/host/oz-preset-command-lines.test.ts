@@ -81,7 +81,12 @@ function dependencies(overrides: Partial<McpToolDependencies>): McpToolDependenc
     },
     appSettings: {
       get: async (key: string) =>
-        key === 'project' ? { branchPrefix: '', appendRandomBranchSuffix: false } : {},
+        key === 'project'
+          ? { branchPrefix: '', appendRandomBranchSuffix: false }
+          : // Terminal command lines: the global session mode is the terminal here.
+            key === 'interface'
+            ? { sessionMode: 'terminal' }
+            : {},
     },
     readProviderSettings: async () => emptyProviderSettings,
     telemetry: { capture: () => {} },

@@ -430,17 +430,17 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
             'Model id for the agent, as its CLI accepts it (for example claude "opus", codex ' +
               '"gpt-6.1-sol", cursor "cursor-grok-4.6-high"). Any id the CLI knows works, not ' +
               "only the listed ones. Defaults to the provider CLI's default model in a terminal, " +
-              'or saved provider settings in chat UI. Chat UI model overrides require a ' +
-              'previously discovered provider model setting'
+              'or saved provider settings in chat. In chat the id is matched against the ' +
+              "agent's own model list; the response reports the value that was applied"
           ),
         effort: z
           .string()
           .optional()
           .describe(
-            'Reasoning effort for the agent in terminal mode, for example "high". claude: ' +
-              '--effort (low, medium, high, xhigh, max); codex: -c model_reasoning_effort ' +
-              '(minimal, low, medium, high, xhigh). Ignored for chat UI and other providers; ' +
-              'the response reports the value that was applied (null when dropped)'
+            'Reasoning effort for the agent, for example "high". claude: --effort (low, ' +
+              'medium, high, xhigh, max); codex: model_reasoning_effort (minimal, low, medium, ' +
+              'high, xhigh). In chat it is the agent effort option. Ignored for other ' +
+              'providers; the response reports the value that was applied (null when dropped)'
           ),
         branchName: z
           .string()
@@ -459,17 +459,19 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
           .boolean()
           .optional()
           .describe(
-            'Start the conversation in the chat UI instead of a terminal (requires an ' +
-              'ACP-capable provider); defaults to false'
+            'true = start the session in chat (OZ chat), false = in a terminal. Omitted = ' +
+              "Oleg's global session mode (default: chat). Providers without chat support " +
+              'fall back to the terminal (the response has a note)'
           ),
         autoApprove: z
           .boolean()
           .optional()
           .describe(
             'Run the agent with permission prompts skipped, so it executes commands and edits ' +
-              'without asking in terminal mode. Defaults to true in OZdash (pass false to get ' +
-              'permission prompts), and is ignored for chat UI and providers without an ' +
-              'auto-approve mode. The response reports the value that was applied'
+              'without asking (terminal flag, or the no-prompt permission mode in chat). ' +
+              'Defaults to true in OZdash (pass false to get permission prompts). Ignored for ' +
+              'providers without an auto-approve mode; cursor chat always auto-approves. The ' +
+              'response reports the value that was applied'
           ),
         ticket: ticketInputSchema
           .optional()
@@ -505,8 +507,8 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
       description:
         'Adds a new agent conversation (a session, shown as a tab) to an existing Emdash task ' +
         "and starts it on a prompt in the task's existing worktree, for example a reviewer " +
-        'next to the executor. Terminal agents only. Provider, model, effort and ' +
-        'auto-approve work as in create_task. The project must be open in Emdash. Use ' +
+        'next to the executor. Provider, model, effort, auto-approve and chatUi (chat or ' +
+        'terminal) work as in create_task. The project must be open in Emdash. Use ' +
         'get_task_status with the returned conversationId to read its output, and ' +
         'send_task_message with it to talk to it.',
       inputSchema: {
@@ -538,6 +540,10 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
           .string()
           .optional()
           .describe('Conversation title, for example "Review"; defaults to "<Provider> (n)"'),
+        chatUi: z
+          .boolean()
+          .optional()
+          .describe('true = chat, false = terminal; omitted = the global session mode'),
       },
       annotations: { destructiveHint: false, openWorldHint: false },
     },

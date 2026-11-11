@@ -3,6 +3,7 @@ import { cell } from '@emdash/wire/state';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { emptyProviderSettings } from '@core/features/conversations/api/provider-settings';
 import type { McpToolDependencies } from './dependencies';
 import { buildEmdashMcpServer } from './register-tools';
 
@@ -135,7 +136,10 @@ function dependencies(overrides: Partial<McpToolDependencies> = {}): McpToolDepe
     workspaceIdentity: {
       resolve: async () => ({ host: { type: 'local', id: 'local' }, path: '/worktrees/task-1' }),
     },
-    appSettings: { get: async () => ({}) },
+    // Fork (ozimakov-st): the global session mode is the terminal in these tests.
+    appSettings: {
+      get: async (key: string) => (key === 'interface' ? { sessionMode: 'terminal' } : {}),
+    },
     telemetry: { capture: () => {} },
     startInitialConversation: async () => ({ started: true }),
     ...overrides,
@@ -750,6 +754,7 @@ describe('buildEmdashMcpServer', () => {
       const tool = tools.find((candidate) => candidate.name === 'create_conversation');
       expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual([
         'autoApprove',
+        'chatUi',
         'effort',
         'model',
         'projectId',
@@ -799,6 +804,48 @@ describe('buildEmdashMcpServer', () => {
         model: 'opus',
         effort: 'high',
         autoApprove: true,
+        conversationType: 'pty',
+      });
+    });
+
+    it('starts a chat (ACP) session with the preset as options when chatUi is true', async () => {
+      const startInitialConversation = vi.fn(async () => ({ started: true }));
+      const { deps, createConversation } = conversationDeps({
+        projects: {
+          track: () => cell({ kind: 'attached' }),
+          requireAttached: () => ok({ host: { type: 'local', id: 'local' } }),
+        } as never,
+        readProviderSettings: (async () => emptyProviderSettings) as never,
+        startInitialConversation,
+      });
+
+      const result = parse(
+        await callTool(deps, 'create_conversation', {
+          projectId: 'p',
+          taskId: 'task-1',
+          prompt: 'Review the diff',
+          provider: 'claude',
+          model: 'opus',
+          effort: 'high',
+          chatUi: true,
+        })
+      );
+
+      expect(createConversation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'acp',
+          options: { model: 'opus', effort: 'high', mode: 'bypassPermissions' },
+          initialQueue: [{ text: 'Review the diff' }],
+        })
+      );
+      expect(startInitialConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: 'task-1', type: 'acp' })
+      );
+      expect(result).toMatchObject({
+        model: 'opus',
+        effort: 'high',
+        autoApprove: true,
+        conversationType: 'acp',
       });
     });
 

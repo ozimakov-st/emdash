@@ -1,8 +1,10 @@
 // Fork (ozimakov-st): MCP create_conversation. Adds a second (third, …) agent session to an
 // existing task, in the task's worktree, for example a reviewer next to the executor. It
 // uses the same operation as "new conversation" in the task UI, and the same provider,
-// model, effort and auto-approve handling as create_task. Terminal agents only.
+// model, effort and auto-approve handling as create_task. Chat (ACP) or terminal follows
+// `chatUi`, else the global session mode, like create_task.
 import { randomUUID } from 'node:crypto';
+import { formatHostRef } from '@emdash/core/primitives/host/api';
 import type { AgentProviderId } from '@emdash/plugins/agents/types';
 import { err, ok, type Result } from '@emdash/shared';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -15,7 +17,9 @@ import { MAX_CONVERSATION_TITLE_LENGTH } from '@core/primitives/conversations/ap
 import { tasks } from '@core/services/app-db/node/schema';
 import { withProjectAttachment } from './attach-project';
 import {
+  resolveAcpLaunch,
   resolveEffort,
+  resolveMcpConversationType,
   resolveModel,
   resolveProvider,
   resolvePtyAutoApprove,
@@ -32,6 +36,8 @@ export type McpCreateConversationInput = {
   /** Defaults to true (no permission prompts), like create_task. */
   autoApprove?: boolean;
   title?: string;
+  /** Fork (ozimakov-st): true = chat, false = terminal, omitted = the global session mode. */
+  chatUi?: boolean;
 };
 
 export type McpCreateConversationResult = {
@@ -43,6 +49,10 @@ export type McpCreateConversationResult = {
   effort: string | null;
   /** False when the provider has no auto-approve mode. */
   autoApprove: boolean;
+  /** Fork (ozimakov-st): chat (ACP) or terminal. */
+  conversationType: 'pty' | 'acp';
+  /** Set when the session exists but did not start, or fell back to the terminal. */
+  note?: string;
 };
 
 /** `Claude (2)`: the UI's default title form, numbered after the task's conversations. */
@@ -86,8 +96,13 @@ export async function createConversationInTask(
   if (!model.success) return model;
   const effort = resolveEffort(provider.data, input.effort);
   if (!effort.success) return effort;
+  const transport = await resolveMcpConversationType(
+    dependencies.appSettings,
+    provider.data,
+    input.chatUi
+  );
   const promptKind = getPlugin(provider.data).capabilities.prompt.kind;
-  if (promptKind !== 'argv' && promptKind !== 'stdin-pipe') {
+  if (transport.type === 'pty' && promptKind !== 'argv' && promptKind !== 'stdin-pipe') {
     return err(
       `Provider "${provider.data}" cannot receive a prompt when it starts in terminal mode. ` +
         'Choose another provider.'
@@ -103,7 +118,7 @@ export async function createConversationInTask(
     );
   }
 
-  return withProjectAttachment(dependencies.projects, input.projectId, async () => {
+  return withProjectAttachment(dependencies.projects, input.projectId, async (project) => {
     // Registers the task session when the task was not opened since the app started
     // (a no-op for a live task). The new conversation is launched inside it.
     const provisioned = await dependencies.tasks.provisionWorkspace(input.taskId);
@@ -117,21 +132,48 @@ export async function createConversationInTask(
       .select({ provider: conversations.provider })
       .from(conversations)
       .where(and(eq(conversations.taskId, input.taskId), liveConversations()));
-    const autoApprove = resolvePtyAutoApprove(provider.data, input.autoApprove);
+    const base = {
+      id: randomUUID(),
+      projectId: input.projectId,
+      taskId: input.taskId,
+      provider: provider.data,
+      title: title || defaultConversationTitle(provider.data, existing),
+    };
+    // Fork (ozimakov-st): chat sessions get the preset as ACP options and start headless.
+    const acp =
+      transport.type === 'acp'
+        ? resolveAcpLaunch(
+            provider.data,
+            await dependencies.readProviderSettings({
+              host: formatHostRef(project.host),
+              providerId: provider.data,
+            }),
+            input,
+            model.data
+          )
+        : null;
+    const autoApprove = acp
+      ? acp.autoApprove
+      : resolvePtyAutoApprove(provider.data, input.autoApprove);
     let conversation;
     try {
-      conversation = await create({
-        id: randomUUID(),
-        projectId: input.projectId,
-        taskId: input.taskId,
-        provider: provider.data,
-        title: title || defaultConversationTitle(provider.data, existing),
-        type: 'pty',
-        autoApprove,
-        ...(model.data && { model: model.data }),
-        ...(effort.data && { effort: effort.data }),
-        initialPrompt: prompt,
-      });
+      conversation = await create(
+        acp
+          ? {
+              ...base,
+              type: 'acp',
+              options: acp.options,
+              initialQueue: [{ text: prompt }],
+            }
+          : {
+              ...base,
+              type: 'pty',
+              autoApprove,
+              ...(model.data && { model: model.data }),
+              ...(effort.data && { effort: effort.data }),
+              initialPrompt: prompt,
+            }
+      );
     } catch (error) {
       dependencies.logger.warn('McpHttpServer: create_conversation failed', {
         taskId: input.taskId,
@@ -139,13 +181,29 @@ export async function createConversationInTask(
       });
       return err(`The conversation could not be started: ${String(error)}`);
     }
+    let note = transport.note;
+    if (acp) {
+      const started = await dependencies.startInitialConversation({
+        projectId: input.projectId,
+        taskId: input.taskId,
+        conversationId: conversation.id,
+        type: 'acp',
+      });
+      if (!started.started) {
+        note = `The chat session was created but did not start${
+          started.message ? `: ${started.message}` : ''
+        }. Opening it in Emdash starts it.`;
+      }
+    }
     return ok({
       conversationId: conversation.id,
       title: conversation.title,
       provider: provider.data,
-      model: model.data ?? null,
-      effort: effort.data ?? null,
+      model: (acp ? acp.model : model.data) ?? null,
+      effort: (acp ? acp.effort : effort.data) ?? null,
       autoApprove,
+      conversationType: acp ? 'acp' : 'pty',
+      ...(note && { note }),
     });
   });
 }

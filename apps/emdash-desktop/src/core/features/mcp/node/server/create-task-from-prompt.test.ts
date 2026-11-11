@@ -52,6 +52,8 @@ function project(host: HostRef = LOCAL_HOST_REF): ProjectProvider {
 function dependencies(options: {
   pushOnCreate?: boolean;
   createTask: ReturnType<typeof vi.fn>;
+  /** Fork (ozimakov-st): the global session mode; these tests default to the terminal. */
+  sessionMode?: 'oz-chat' | 'emdash-chat' | 'terminal';
 }): McpToolDependencies {
   const attached = project();
   return {
@@ -73,7 +75,9 @@ function dependencies(options: {
               appendRandomBranchSuffix: false,
               ...(options.pushOnCreate !== undefined && { pushOnCreate: options.pushOnCreate }),
             }
-          : {},
+          : key === 'interface'
+            ? { sessionMode: options.sessionMode ?? 'terminal' }
+            : {},
     },
     readProviderSettings,
     telemetry: { capture: () => {} },
@@ -156,7 +160,7 @@ describe('createTaskFromPrompt', () => {
     expect(result).toMatchObject({ success: true, data: { autoApprove: false } });
   });
 
-  it('carries native ACP options without applying terminal auto-approve', async () => {
+  it('carries native ACP options and keeps a permission mode that was already chosen', async () => {
     readProviderSettings.mockResolvedValue({
       ...emptyProviderSettings,
       acp: { version: '1', options: { 'native-model': 'saved-model', mode: 'ask' } },
@@ -173,7 +177,7 @@ describe('createTaskFromPrompt', () => {
     });
     expect(result).toMatchObject({
       success: true,
-      data: { conversationType: 'acp', autoApprove: false },
+      data: { conversationType: 'acp', autoApprove: true },
     });
     const [params] = createTask.mock.calls[0] as unknown as [CreateTaskParams];
     expect(params.taskConfig.initialConversation).toMatchObject({
@@ -212,24 +216,93 @@ describe('createTaskFromPrompt', () => {
     });
     expect(result.success).toBe(true);
     const [params] = createTask.mock.calls[0] as unknown as [CreateTaskParams];
-    expect(params.taskConfig.initialConversation?.options).toEqual({ 'native-model': 'sonnet' });
+    // Fork (ozimakov-st): plus the no-prompt permission mode.
+    expect(params.taskConfig.initialConversation?.options).toEqual({
+      'native-model': 'sonnet',
+      mode: 'bypassPermissions',
+    });
   });
 
-  it('rejects an ACP model override before creating a task when its option id is unknown', async () => {
+  it('without a cached catalog, sends the model and effort to the known option ids', async () => {
+    const createTask = vi.fn(async () => ok({}));
+    const result = await createTaskFromPrompt(dependencies({ createTask }), {
+      projectId: 'project-1',
+      prompt: 'Fix the bug',
+      provider: 'codex',
+      chatUi: true,
+      model: 'gpt-6.1-sol',
+      effort: 'high',
+      branchName: 'feature/fix',
+    });
+    expect(result).toMatchObject({
+      success: true,
+      data: { conversationType: 'acp', model: 'gpt-6.1-sol', effort: 'high', autoApprove: true },
+    });
+    const [params] = createTask.mock.calls[0] as unknown as [CreateTaskParams];
+    expect(params.taskConfig.initialConversation?.options).toEqual({
+      model: 'gpt-6.1-sol',
+      reasoning_effort: 'high',
+      mode: 'agent-full-access',
+    });
+  });
+
+  it('follows the global session mode (OZ chat by default) when chatUi is omitted', async () => {
+    const createTask = vi.fn(async () => ok({}));
+    const result = await createTaskFromPrompt(
+      dependencies({ createTask, sessionMode: 'oz-chat' }),
+      {
+        projectId: 'project-1',
+        prompt: 'Fix the bug',
+        provider: 'claude',
+        model: 'opus',
+        branchName: 'feature/fix',
+      }
+    );
+    expect(result).toMatchObject({ success: true, data: { conversationType: 'acp' } });
+    const [params] = createTask.mock.calls[0] as unknown as [CreateTaskParams];
+    expect(params.taskConfig.initialConversation).toMatchObject({
+      type: 'acp',
+      options: { model: 'opus', mode: 'bypassPermissions' },
+      initialQueue: [{ text: 'Fix the bug' }],
+    });
+
+    const terminal = await createTaskFromPrompt(
+      dependencies({ createTask: vi.fn(async () => ok({})), sessionMode: 'oz-chat' }),
+      { projectId: 'project-1', prompt: 'x', provider: 'claude', chatUi: false, branchName: 'b' }
+    );
+    expect(terminal).toMatchObject({ success: true, data: { conversationType: 'pty' } });
+  });
+
+  it('falls back to the terminal, with a note, for an agent without chat support', async () => {
+    const createTask = vi.fn(async () => ok({}));
+    const result = await createTaskFromPrompt(
+      dependencies({ createTask, sessionMode: 'oz-chat' }),
+      {
+        projectId: 'project-1',
+        prompt: 'Fix the bug',
+        provider: 'charm',
+        branchName: 'feature/fix',
+      }
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: { conversationType: 'pty', note: expect.stringContaining('no chat mode') },
+    });
+  });
+
+  it('pins the normal permission mode in chat when autoApprove is false', async () => {
     const createTask = vi.fn(async () => ok({}));
     const result = await createTaskFromPrompt(dependencies({ createTask }), {
       projectId: 'project-1',
       prompt: 'Fix the bug',
       provider: 'claude',
       chatUi: true,
-      model: 'sonnet',
+      autoApprove: false,
       branchName: 'feature/fix',
     });
-    expect(result).toMatchObject({
-      success: false,
-      error: expect.stringContaining('not discovered'),
-    });
-    expect(createTask).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: true, data: { autoApprove: false } });
+    const [params] = createTask.mock.calls[0] as unknown as [CreateTaskParams];
+    expect(params.taskConfig.initialConversation?.options).toEqual({ mode: 'default' });
   });
 
   it('rejects a prompt for a terminal provider that cannot receive one at launch', async () => {
