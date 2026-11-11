@@ -54,4 +54,25 @@ export const conversationConfig = defineVersionedSchema()
 
 export type ConversationConfig = typeof conversationConfig.Type;
 export type ConversationConfigPty = z.infer<typeof ptyConfigV1>;
+
+/**
+ * Fork (ozimakov-st): the stored config of a terminal conversation. One builder for the
+ * task's initial conversation (createTask) and later ones (createConversation, MCP
+ * create_conversation), so both keep model and effort. Empty values are left out.
+ */
+export function buildPtyConversationConfig(options: {
+  autoApprove?: boolean;
+  initialPrompt?: string;
+  model?: string;
+  effort?: string;
+}): ConversationConfigPty {
+  return {
+    version: '1',
+    type: 'pty',
+    ...(options.autoApprove !== undefined && { autoApprove: options.autoApprove }),
+    ...(options.initialPrompt && { initialPrompt: options.initialPrompt }),
+    ...(options.model && { model: options.model }),
+    ...(options.effort && { effort: options.effort }),
+  };
+}
 export type ConversationConfigAcp = z.infer<typeof acpConfigV1>;

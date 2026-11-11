@@ -21,7 +21,10 @@ import {
 import { mapConversationRowToConversation } from '@core/features/conversations/api/node/utils';
 import type { ConversationsRuntimeBroker } from '@core/features/conversations/api/runtime-adapter';
 import type { TaskSessionManager } from '@core/features/tasks/api/node/task-session-manager';
-import { type ConversationConfig } from '@core/primitives/conversations/api';
+import {
+  buildPtyConversationConfig,
+  type ConversationConfig,
+} from '@core/primitives/conversations/api';
 import {
   type Conversation,
   type CreateConversationParams,
@@ -98,15 +101,13 @@ export async function createConversation(
           ...(params.options && { options: params.options }),
           ...(initialQueue?.length && { initialQueue }),
         }
-      : {
-          version: '1',
-          type: 'pty',
-          ...(params.autoApprove !== undefined && { autoApprove: params.autoApprove }),
-          ...(params.model && { model: params.model }),
-          // Fork (ozimakov-st): reasoning effort (MCP create_conversation).
-          ...(params.effort && { effort: params.effort }),
-          ...(params.initialPrompt && { initialPrompt: params.initialPrompt }),
-        };
+      : // Fork (ozimakov-st): shared builder, keeps model and reasoning effort.
+        buildPtyConversationConfig({
+          autoApprove: params.autoApprove,
+          initialPrompt: params.initialPrompt,
+          model: params.model,
+          effort: params.effort,
+        });
   const config = configObj;
 
   // Host-first ordering (spec §6.2): the index is authoritative for conversation

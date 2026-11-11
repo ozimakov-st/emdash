@@ -17,7 +17,10 @@ import type {
   TuiStartOutcome,
   TuiStartError,
 } from '#runtimes/tui-agents/api';
-import { persistedTuiAgentStartInputSchema } from '#runtimes/tui-agents/api';
+import {
+  persistedTuiAgentStartInputSchema,
+  tuiPromptCommandContext,
+} from '#runtimes/tui-agents/api';
 import { TuiHookPipeline } from '#runtimes/tui-agents/node/hooks/hook-pipeline';
 import { TuiHookServer } from '#runtimes/tui-agents/node/hooks/hook-server';
 import {
@@ -532,16 +535,10 @@ export class TuiAgentsRuntime {
       startedAt,
     });
 
-    const commandResult = await this.deps.agentHost.buildPromptCommand(config.input.providerId, {
-      extraArgs: config.input.extraArgs,
-      autoApprove: config.input.autoApprove ?? false,
-      initialPrompt: isResuming ? undefined : config.input.initialPrompt,
-      sessionId: config.input.conversationId,
-      providerSessionId: config.input.sessionId ?? undefined,
-      isResuming,
-      model: config.input.model ?? '',
-      effort: config.input.effort ?? undefined,
-    });
+    const commandResult = await this.deps.agentHost.buildPromptCommand(
+      config.input.providerId,
+      tuiPromptCommandContext(config.input, isResuming)
+    );
     if (!this.isCurrentGeneration(config.input.conversationId, generation)) {
       return this.cancelledSpawn(config.input.conversationId);
     }

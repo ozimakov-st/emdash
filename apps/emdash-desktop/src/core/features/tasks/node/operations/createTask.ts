@@ -39,7 +39,10 @@ import {
   findWorkspaceTombstoneConflict,
   type WorkspaceTombstoneConflict,
 } from '@core/features/workspaces/api/node/registry/workspace-tombstones';
-import type { ConversationConfig } from '@core/primitives/conversations/api';
+import {
+  buildPtyConversationConfig,
+  type ConversationConfig,
+} from '@core/primitives/conversations/api';
 import type { Conversation } from '@core/primitives/conversations/api';
 import type {
   CreateTaskError,
@@ -267,14 +270,12 @@ export async function prepareCreateTask(
             ...(initialQueue?.length && { initialQueue }),
             ...(ic.model && { model: ic.model }),
           }
-        : {
-            version: '1',
-            type: 'pty',
-            ...(ic.autoApprove !== undefined && { autoApprove: ic.autoApprove }),
-            ...(ic.initialPrompt?.trim() && { initialPrompt: ic.initialPrompt.trim() }),
-            ...(ic.model && { model: ic.model }),
-            ...(ic.effort && { effort: ic.effort }),
-          };
+        : buildPtyConversationConfig({
+            autoApprove: ic.autoApprove,
+            initialPrompt: ic.initialPrompt?.trim(),
+            model: ic.model,
+            effort: ic.effort,
+          });
     if (conversationWorkspacePath === null) {
       return err({
         type: 'provision-failed',
