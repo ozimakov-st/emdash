@@ -245,6 +245,8 @@ export function isArchived(ticket: Pick<TicketSummary, 'status'>): boolean {
 /** The board column of a ticket. Archived wins over "needs Oleg". */
 export function ticketColumn(ticket: Pick<TicketSummary, 'status' | 'needsOleg'>): TicketColumnId {
   if (ticket.status === 'done' || ticket.status === 'dropped') return 'archive';
+  // A parked ticket stays parked even with open questions for Oleg.
+  if (ticket.status === 'parked') return 'parked';
   if (ticket.status === 'blocked' || ticket.needsOleg) return 'needs-oleg';
   return ticket.status;
 }

@@ -54,6 +54,7 @@ describe('ticketColumn', () => {
     expect(ticketColumn({ status: 'active', needsOleg: false })).toBe('active');
     expect(ticketColumn({ status: 'waiting', needsOleg: false })).toBe('waiting');
     expect(ticketColumn({ status: 'parked', needsOleg: false })).toBe('parked');
+    expect(ticketColumn({ status: 'parked', needsOleg: true })).toBe('parked');
     expect(ticketColumn({ status: 'done', needsOleg: true })).toBe('archive');
     expect(ticketColumn({ status: 'dropped', needsOleg: false })).toBe('archive');
   });
