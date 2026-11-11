@@ -56,6 +56,8 @@
 
 .oz-scroll {
   flex: 1 1 auto;
+  /* Never scroll sideways: long content truncates (rows) or wraps (code, diffs). */
+  overflow-x: hidden;
   overflow-y: auto;
   overflow-anchor: none;
   scrollbar-gutter: stable;
@@ -63,6 +65,7 @@
 
 .oz-column {
   box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   max-width: var(--oz-column);
   margin: 0 auto;
@@ -201,7 +204,9 @@
 
 .oz-md pre {
   padding: 12px 14px;
-  overflow-x: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   border-radius: 8px;
   background: var(--oz-code-bg);
   font-family: var(--oz-mono);
@@ -223,6 +228,7 @@
 
 .oz-md :is(th, td) {
   padding: 6px 12px;
+  overflow-wrap: anywhere;
   border: 1px solid var(--oz-border);
   text-align: left;
   vertical-align: top;
@@ -265,6 +271,10 @@
 
 .oz-row {
   display: flex;
+  box-sizing: border-box;
+  /* A button sizes to its content; pin it to the column so the pill can truncate. */
+  width: calc(100% + 12px);
+  max-width: calc(100% + 12px);
   min-width: 0;
   align-items: center;
   gap: 8px;
@@ -437,7 +447,8 @@ button.oz-row:hover {
 
 .oz-diff-line {
   padding: 0 10px;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .oz-diff-line.is-add {
