@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createPmEventLog,
   createPmRelay,
   createPmRelayTracker,
+  isSafeTicketId,
   pmRelayEnabled,
+  pmRelayMode,
   relayMessage,
+  ticketEvent,
+  type TicketEvent,
   type DueTransition,
   type RelayEvent,
 } from './pm-relay';
@@ -197,5 +202,103 @@ describe('pmRelayEnabled', () => {
     expect(pmRelayEnabled({ OZDASH_PM_RELAY: 'off' })).toBe(false);
     expect(pmRelayEnabled({ OZDASH_PM_RELAY: ' OFF ' })).toBe(false);
     expect(pmRelayEnabled({ OZDASH_PM_RELAY: '0' })).toBe(false);
+  });
+});
+
+describe('pmRelayMode (fork)', () => {
+  it('writes the event file by default; type and off are opt-in', () => {
+    expect(pmRelayMode({})).toBe('file');
+    expect(pmRelayMode({ OZDASH_PM_RELAY: 'file' })).toBe('file');
+    expect(pmRelayMode({ OZDASH_PM_RELAY: ' Type ' })).toBe('type');
+    expect(pmRelayMode({ OZDASH_PM_RELAY: 'off' })).toBe('off');
+    expect(pmRelayMode({ OZDASH_PM_RELAY: 'no' })).toBe('off');
+  });
+});
+
+describe('ticketEvent', () => {
+  it('builds the JSON line with a hint for emdash-oz status', () => {
+    expect(
+      ticketEvent({
+        now: Date.UTC(2026, 10, 10, 12, 0, 0),
+        ticketId: '5',
+        transition: { projectId: 'p1', taskId: 't1', conversationId: 'c1', status: 'completed' },
+        taskName: 'fix-login',
+        projectName: 'emdash',
+        conversationTitle: 'Review',
+        provider: 'cursor',
+      })
+    ).toEqual({
+      ts: '2026-11-10T12:00:00.000Z',
+      ticket: '5',
+      taskId: 't1',
+      taskName: 'fix-login',
+      projectId: 'p1',
+      projectName: 'emdash',
+      conversationId: 'c1',
+      conversationTitle: 'Review',
+      provider: 'cursor',
+      status: 'completed',
+      hint: 'emdash-oz status t1 --conversation c1',
+    });
+  });
+
+  it('accepts only ticket ids that are safe file names', () => {
+    expect(isSafeTicketId('5')).toBe(true);
+    expect(isSafeTicketId('12-a_b')).toBe(true);
+    expect(isSafeTicketId('../5')).toBe(false);
+    expect(isSafeTicketId('')).toBe(false);
+  });
+});
+
+describe('createPmEventLog', () => {
+  const asEvent = (transition: DueTransition): TicketEvent =>
+    ticketEvent({
+      now: 0,
+      ticketId: '5',
+      transition,
+      taskName: 'x',
+      projectName: 'y',
+      conversationTitle: '',
+      provider: 'claude',
+    });
+
+  it('appends each due transition once, with the same debounce, and never waits', async () => {
+    let now = 0;
+    const append = vi.fn(async (_event: TicketEvent) => {});
+    const log = createPmEventLog({
+      now: () => now,
+      resolve: async (transition) => asEvent(transition),
+      append,
+      logger: { warn: vi.fn() },
+      debounceMs: 20 * S,
+    });
+    log.onAgentEvent(event('stop'));
+    now = 10 * S;
+    await log.tick();
+    expect(append).not.toHaveBeenCalled();
+    now = 21 * S;
+    await log.tick();
+    await log.tick();
+    expect(append).toHaveBeenCalledTimes(1);
+    expect(append.mock.calls[0][0]).toMatchObject({ ticket: '5', status: 'completed' });
+  });
+
+  it('skips unresolved transitions and logs write errors', async () => {
+    const warn = vi.fn();
+    const log = createPmEventLog({
+      now: () => 30 * S,
+      resolve: async (transition) =>
+        transition.conversationId === 'c1' ? null : asEvent(transition),
+      append: async () => {
+        throw new Error('disk full');
+      },
+      logger: { warn },
+      debounceMs: 0,
+    });
+    log.onAgentEvent(event('stop'));
+    log.onAgentEvent(event('error', { conversationId: 'c2' }));
+    await log.tick();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][1]).toMatchObject({ ticket: '5' });
   });
 });

@@ -1,10 +1,14 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { conversationRegistryTable } from '@core/features/conversations/api/node/registry';
 import type { TaskTicket } from '@core/features/mcp/api/ozdash-task-ticket';
 import type { McpToolDependencies } from '@core/features/mcp/node/server/dependencies';
+import { ticketEvent } from '@core/features/ozdash/api/pm-relay';
 import type { TicketSummary } from '@core/features/ozdash/api/tickets';
 import { tasks } from '@core/services/app-db/node/schema';
-import { resolveRelayTarget } from './ozdash-pm-relay';
+import { appendTicketEvent, resolveRelayTarget, resolveTicketEvent } from './ozdash-pm-relay';
 
 type PmRow = { projectId: string; archivedAt: string | null };
 
@@ -84,5 +88,56 @@ describe('resolveRelayTarget', () => {
     expect(
       await resolveRelayTarget(deps({ id: '5', pmSessionId: 'pm' }, null), [], transition)
     ).toBeNull();
+  });
+});
+
+describe('resolveTicketEvent (file mode)', () => {
+  it('needs no live PM session; skips the PM itself and tasks without a ticket', async () => {
+    const event = await resolveTicketEvent(
+      deps({ id: '5', pmSessionId: 'pm' }, null),
+      [],
+      transition,
+      Date.UTC(2026, 10, 10)
+    );
+    expect(event).toMatchObject({
+      ticket: '5',
+      taskId: 'child',
+      taskName: 'fix-login',
+      projectName: 'emdash',
+      conversationTitle: 'Review',
+      provider: 'cursor',
+      status: 'awaiting-input',
+      hint: 'emdash-oz status child --conversation c1',
+    });
+    const pmItself = [ticket({ id: '9', pmSession: 'child', searchText: 'emdash: child' })];
+    expect(await resolveTicketEvent(deps(null, livePm), pmItself, transition, 0)).toBeNull();
+    expect(await resolveTicketEvent(deps(null, livePm), [], transition, 0)).toBeNull();
+  });
+});
+
+describe('appendTicketEvent', () => {
+  const event = (ticketId: string) =>
+    ticketEvent({
+      now: 0,
+      ticketId,
+      transition,
+      taskName: 'fix-login',
+      projectName: 'emdash',
+      conversationTitle: 'Review',
+      provider: 'cursor',
+    });
+
+  it('creates the folder and appends one JSON line per event', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ozdash-events-'));
+    try {
+      const dir = join(root, 'ticket-events');
+      await appendTicketEvent(dir, event('5'));
+      await appendTicketEvent(dir, { ...event('5'), status: 'completed' });
+      const lines = (await readFile(join(dir, '5.jsonl'), 'utf8')).trim().split('\n');
+      expect(lines.map((line) => JSON.parse(line).status)).toEqual(['awaiting-input', 'completed']);
+      await expect(appendTicketEvent(dir, event('../x'))).rejects.toThrow('unsafe ticket id');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

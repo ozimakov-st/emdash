@@ -41,13 +41,20 @@ task, or the task with that conversation selected. When the ticket has archived 
 "Show archived (n)" toggle at the bottom (remembered) lists them dimmed with an `archived`
 label and a **Restore** button (the sidebar's Restore). MCP `restore_task` does the same.
 **PM relay:** when a conversation in a ticket's task (not the PM session) becomes
-awaiting-input, completed or error, and stays so for 20 s, OZdash types one line into the
-ticket's PM session (marker `pmSessionId`, else the file's `pm_session`; only if it exists
-and is not archived), like MCP `send_task_message`: `[OZdash] Ticket #5 · <task>
-(<project>) · <conversation> is now <status>. Run: emdash-oz status <taskId> --conversation
-<id>`. Once per transition (working re-arms it). While the PM session is working the line
-waits, and goes out (several lines as one message) when it is not. Turn off with
-`OZDASH_PM_RELAY=off`. Rule: `ozdash/api/pm-relay.ts`; wiring: `main/host/ozdash-pm-relay.ts`.
+awaiting-input, completed or error, and stays so for 20 s, OZdash reports it once per
+transition (working re-arms it). Mode `OZDASH_PM_RELAY`:
+- `file` (default): appends one JSON line to
+  `~/Library/Application Support/emdash-oz/ticket-events/<ticket id>.jsonl`:
+  `{"ts", "ticket", "taskId", "taskName", "projectId", "projectName", "conversationId",
+  "conversationTitle", "provider", "status", "hint": "emdash-oz status <taskId> --conversation <id>"}`.
+  The PM (or its background watcher) reads it with `emdash-oz wait --ticket <id>`. Nothing is
+  typed into the PM chat, and no live PM session is needed.
+- `type`: the old behavior. Types `[OZdash] Ticket #5 · <task> (<project>) · <conversation> is
+  now <status>. Run: emdash-oz status …` into the ticket's PM session (marker `pmSessionId`,
+  else the file's `pm_session`; only if it exists and is not archived), like MCP
+  `send_task_message`; while the PM is working the line waits (several go out as one message).
+- `off` (or `0`, `false`, `no`): nothing.
+Rule: `ozdash/api/pm-relay.ts`; wiring: `main/host/ozdash-pm-relay.ts`.
 **Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
 (title, Goal, priority). Save rewrites only the changed fields in place (a new priority
 clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and

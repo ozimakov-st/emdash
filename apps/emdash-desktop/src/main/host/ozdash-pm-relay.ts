@@ -3,7 +3,11 @@
 // (MCP create_task) or by an `emdash: <task id>` ref in the ticket file. The PM session
 // is the marker's `pmSessionId`, else the ticket file's `pm_session`. The message goes
 // through the same path as MCP send_task_message, only to a PM session that exists and
-// is not archived. Turn off with OZDASH_PM_RELAY=off.
+// is not archived. Modes (OZDASH_PM_RELAY): `file` (default) appends the event to
+// `<userData>/ticket-events/<ticket id>.jsonl` for `emdash-oz wait`; `type` types the line
+// into the PM session; `off`.
+import { appendFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Logger } from '@emdash/shared/logger';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
@@ -14,12 +18,16 @@ import type { McpToolDependencies } from '@core/features/mcp/node/server/depende
 import { taskTicketStoreOf } from '@core/features/mcp/node/server/ozdash-task-ticket-store';
 import { sendTaskMessage } from '@core/features/mcp/node/server/task-conversation';
 import {
+  createPmEventLog,
   createPmRelay,
+  isSafeTicketId,
   PM_RELAY_TICK_MS,
-  pmRelayEnabled,
+  pmRelayMode,
   relayMessage,
+  ticketEvent,
   type DueTransition,
   type RelayTarget,
+  type TicketEvent,
 } from '@core/features/ozdash/api/pm-relay';
 import { ticketByFileRef } from '@core/features/ozdash/api/ticket-sessions';
 import type { TicketSummary } from '@core/features/ozdash/api/tickets';
@@ -28,6 +36,66 @@ import type { AgentStatusService } from '@main/core/agent-status/agent-status-se
 
 const firstRow = <T>(rows: T[]): T | undefined => rows[0];
 
+/** The task's ticket id and PM session id (marker first, else the ticket file). */
+async function ticketOfTask(
+  mcp: McpToolDependencies,
+  tickets: readonly TicketSummary[],
+  taskId: string
+): Promise<{ ticketId?: string; pmTaskId?: string }> {
+  const marker = await taskTicketStoreOf(mcp).get(taskId);
+  const ticket = marker
+    ? (tickets.find((candidate) => candidate.id === marker.id) ?? null)
+    : ticketByFileRef(taskId, tickets);
+  return {
+    ticketId: marker?.id ?? ticket?.id,
+    pmTaskId: marker?.pmSessionId || ticket?.pmSession || undefined,
+  };
+}
+
+/** The task's name and project name, and the conversation's title and provider. */
+async function describeTransition(mcp: McpToolDependencies, transition: DueTransition) {
+  const task = firstRow(
+    await mcp.db
+      .select({ name: tasks.name, projectName: projects.name })
+      .from(tasks)
+      .leftJoin(projects, eq(projects.id, tasks.projectId))
+      .where(eq(tasks.id, transition.taskId))
+      .limit(1)
+  );
+  const conversation = firstRow(
+    await mcp.db
+      .select({ title: conversations.title, provider: conversations.provider })
+      .from(conversations)
+      .where(eq(conversations.id, transition.conversationId))
+      .limit(1)
+  );
+  return {
+    taskName: task?.name ?? transition.taskId,
+    projectName: task?.projectName ?? transition.projectId,
+    conversationTitle: conversation?.title ?? '',
+    provider: conversation?.provider ?? '',
+  };
+}
+
+/** File mode: the event for a due transition, or null (no ticket, or the PM itself). */
+export async function resolveTicketEvent(
+  mcp: McpToolDependencies,
+  tickets: readonly TicketSummary[],
+  transition: DueTransition,
+  now: number
+): Promise<TicketEvent | null> {
+  const { ticketId, pmTaskId } = await ticketOfTask(mcp, tickets, transition.taskId);
+  if (!ticketId || pmTaskId === transition.taskId) return null;
+  return ticketEvent({ now, ticketId, transition, ...(await describeTransition(mcp, transition)) });
+}
+
+/** Appends one event line to `<dir>/<ticket id>.jsonl` (creates the folder). */
+export async function appendTicketEvent(dir: string, event: TicketEvent): Promise<void> {
+  if (!isSafeTicketId(event.ticket)) throw new Error(`unsafe ticket id: ${event.ticket}`);
+  await mkdir(dir, { recursive: true });
+  await appendFile(join(dir, `${event.ticket}.jsonl`), `${JSON.stringify(event)}\n`, 'utf8');
+}
+
 /** Where a due transition goes: the ticket's live PM session and the message, or null. */
 export async function resolveRelayTarget(
   mcp: McpToolDependencies,
@@ -35,12 +103,7 @@ export async function resolveRelayTarget(
   transition: DueTransition
 ): Promise<RelayTarget | null> {
   const { db } = mcp;
-  const marker = await taskTicketStoreOf(mcp).get(transition.taskId);
-  const ticket = marker
-    ? (tickets.find((candidate) => candidate.id === marker.id) ?? null)
-    : ticketByFileRef(transition.taskId, tickets);
-  const ticketId = marker?.id ?? ticket?.id;
-  const pmTaskId = marker?.pmSessionId || ticket?.pmSession;
+  const { ticketId, pmTaskId } = await ticketOfTask(mcp, tickets, transition.taskId);
   if (!ticketId || !pmTaskId || pmTaskId === transition.taskId) return null;
 
   const pm = firstRow(
@@ -52,28 +115,14 @@ export async function resolveRelayTarget(
   );
   if (!pm || pm.archivedAt) return null;
 
-  const task = firstRow(
-    await db
-      .select({ name: tasks.name, projectName: projects.name })
-      .from(tasks)
-      .leftJoin(projects, eq(projects.id, tasks.projectId))
-      .where(eq(tasks.id, transition.taskId))
-      .limit(1)
-  );
-  const conversation = firstRow(
-    await db
-      .select({ title: conversations.title, provider: conversations.provider })
-      .from(conversations)
-      .where(eq(conversations.id, transition.conversationId))
-      .limit(1)
-  );
+  const described = await describeTransition(mcp, transition);
   return {
     pm: { projectId: pm.projectId, taskId: pmTaskId },
     message: relayMessage({
       ticketId,
-      taskName: task?.name ?? transition.taskId,
-      projectName: task?.projectName ?? transition.projectId,
-      conversation: conversation?.title || conversation?.provider || 'agent',
+      taskName: described.taskName,
+      projectName: described.projectName,
+      conversation: described.conversationTitle || described.provider || 'agent',
       status: transition.status,
       taskId: transition.taskId,
       conversationId: transition.conversationId,
@@ -95,22 +144,34 @@ export function installOzdashPmRelay(
   mcp: McpToolDependencies,
   agentStatus: Pick<AgentStatusService, 'on'>,
   tickets: () => readonly TicketSummary[],
-  logger: Pick<Logger, 'info' | 'warn'>
+  logger: Pick<Logger, 'info' | 'warn'>,
+  /** File mode: the ticket events folder (`<userData>/ticket-events`). */
+  eventsDir: string
 ): () => void {
-  if (!pmRelayEnabled(process.env)) {
+  const mode = pmRelayMode(process.env);
+  if (mode === 'off') {
     logger.info('ozdash pm relay: off (OZDASH_PM_RELAY)');
     return () => {};
   }
-  const relay = createPmRelay({
-    now: () => Date.now(),
-    resolve: (transition) => resolveRelayTarget(mcp, tickets(), transition),
-    pmBusy: (pm) => pmBusy(mcp, pm),
-    send: async (pm, message) => {
-      const sent = await sendTaskMessage(mcp, { ...pm, message });
-      return sent.success ? { success: true } : { success: false, error: sent.error };
-    },
-    logger,
-  });
+  const now = () => Date.now();
+  const relay =
+    mode === 'file'
+      ? createPmEventLog({
+          now,
+          resolve: (transition) => resolveTicketEvent(mcp, tickets(), transition, now()),
+          append: (event) => appendTicketEvent(eventsDir, event),
+          logger,
+        })
+      : createPmRelay({
+          now,
+          resolve: (transition) => resolveRelayTarget(mcp, tickets(), transition),
+          pmBusy: (pm) => pmBusy(mcp, pm),
+          send: async (pm, message) => {
+            const sent = await sendTaskMessage(mcp, { ...pm, message });
+            return sent.success ? { success: true } : { success: false, error: sent.error };
+          },
+          logger,
+        });
   const unsubscribe = agentStatus.on('agent:event', (event) => relay.onAgentEvent(event));
   let ticking = false;
   const timer = setInterval(() => {

@@ -8,7 +8,11 @@
 //   - At most one message per transition.
 //   - The message waits while the PM session is working, and goes out when it is not.
 //     Messages that wait together go out as one message (one line each).
-// The main process runs it (main/host/ozdash-pm-relay.ts). Turn off: OZDASH_PM_RELAY=off.
+// The main process runs it (main/host/ozdash-pm-relay.ts).
+// Modes (OZDASH_PM_RELAY): `file` (default) appends one JSON line per transition to
+// `<userData>/ticket-events/<ticket id>.jsonl`, which the PM reads with `emdash-oz wait`
+// (no typing into the PM chat, no PM-busy queue); `type` types the line into the PM
+// session (the old behavior, with the queue); `off` (or `0`, `false`, `no`) does nothing.
 import type { AgentStatus } from '@core/primitives/agents/api';
 import { statusFromAgentEvent, type AttentionTransitionEvent } from './attention-chime';
 
@@ -28,10 +32,105 @@ export type DueTransition = {
   status: RelayStatus;
 };
 
+export type PmRelayMode = 'file' | 'type' | 'off';
+
+/** `OZDASH_PM_RELAY`: `type`, `off` (or `0`, `false`, `no`), else `file` (the default). */
+export function pmRelayMode(env: Record<string, string | undefined>): PmRelayMode {
+  const value = env.OZDASH_PM_RELAY?.trim().toLowerCase();
+  if (value && ['off', '0', 'false', 'no'].includes(value)) return 'off';
+  return value === 'type' ? 'type' : 'file';
+}
+
 /** False when `OZDASH_PM_RELAY` is `off` (or `0`, `false`, `no`). */
 export function pmRelayEnabled(env: Record<string, string | undefined>): boolean {
-  const value = env.OZDASH_PM_RELAY?.trim().toLowerCase();
-  return !value || !['off', '0', 'false', 'no'].includes(value);
+  return pmRelayMode(env) !== 'off';
+}
+
+/** The folder (in the app data dir) with one `<ticket id>.jsonl` event file per ticket. */
+export const TICKET_EVENTS_DIR = 'ticket-events';
+
+/** One line of `<ticket id>.jsonl` (file mode). `emdash-oz wait` reads these. */
+export type TicketEvent = {
+  ts: string;
+  ticket: string;
+  taskId: string;
+  taskName: string;
+  projectId: string;
+  projectName: string;
+  conversationId: string;
+  conversationTitle: string;
+  provider: string;
+  status: RelayStatus;
+  hint: string;
+};
+
+/** A ticket id that is safe as a file name (`5`, `12-a`): no path parts. */
+export function isSafeTicketId(id: string): boolean {
+  return /^[\w-]{1,64}$/.test(id);
+}
+
+/** The event for a due transition, given what the app knows about its task. */
+export function ticketEvent(input: {
+  now: number;
+  ticketId: string;
+  transition: DueTransition;
+  taskName: string;
+  projectName: string;
+  conversationTitle: string;
+  provider: string;
+}): TicketEvent {
+  const { transition } = input;
+  return {
+    ts: new Date(input.now).toISOString(),
+    ticket: input.ticketId,
+    taskId: transition.taskId,
+    taskName: input.taskName,
+    projectId: transition.projectId,
+    projectName: input.projectName,
+    conversationId: transition.conversationId,
+    conversationTitle: input.conversationTitle,
+    provider: input.provider,
+    status: transition.status,
+    hint: `emdash-oz status ${transition.taskId} --conversation ${transition.conversationId}`,
+  };
+}
+
+export type PmEventLogDeps = {
+  now(): number;
+  /** The event, or null (no ticket, or the task is the ticket's PM session). */
+  resolve(transition: DueTransition): Promise<TicketEvent | null>;
+  /** Appends the event to its ticket's file. */
+  append(event: TicketEvent): Promise<void>;
+  logger: { warn(message: string, context?: Record<string, unknown>): void };
+  debounceMs?: number;
+};
+
+/**
+ * File mode: the same transitions as `createPmRelay`, written to the ticket's event file
+ * as they become due. Nothing waits for the PM session.
+ */
+export function createPmEventLog(deps: PmEventLogDeps) {
+  const tracker = createPmRelayTracker(deps.debounceMs);
+  return {
+    onAgentEvent(event: RelayEvent): void {
+      tracker.track(event, deps.now());
+    },
+
+    async tick(): Promise<void> {
+      for (const transition of tracker.takeDue(deps.now())) {
+        const event = await deps.resolve(transition);
+        if (!event) continue;
+        try {
+          await deps.append(event);
+        } catch (error) {
+          deps.logger.warn('ozdash pm relay: could not write the ticket event', {
+            ticket: event.ticket,
+            error: String(error),
+          });
+        }
+      }
+    },
+  };
 }
 
 /** The one-line message for the PM session. */

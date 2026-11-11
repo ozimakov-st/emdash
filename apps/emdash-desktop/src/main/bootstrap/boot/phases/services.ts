@@ -70,6 +70,7 @@ import {
   type EmdashMcpServerHandle,
 } from '@core/features/mcp/node/server/create-mcp-server';
 import { createTaskTicketStore } from '@core/features/mcp/node/server/ozdash-task-ticket-store';
+import { TICKET_EVENTS_DIR } from '@core/features/ozdash/api/pm-relay';
 import { previewServerService } from '@core/features/preview-servers/api/node/preview-server-service-instance';
 import { PreviewServerAccessService } from '@core/features/preview-servers/node/preview-server-access-service';
 import type { ProjectAttachmentManager } from '@core/features/projects/api/node/project-attachment-manager';
@@ -937,9 +938,16 @@ export async function bootServices(
   appScope.add(() => ipcMain.removeHandler(OZDASH_TASK_TICKETS_CHANNEL));
   // Fork (ozimakov-st): the Tickets board (see main/host/ozdash-tickets.ts).
   appScope.add(registerOzdashTickets(mcpServer.dependencies, log));
-  // OZdash: tell a ticket's PM session when one of its child sessions comes back.
+  // OZdash: tell a ticket's PM session when one of its child sessions comes back
+  // (default: an event line in <userData>/ticket-events/<ticket id>.jsonl).
   appScope.add(
-    installOzdashPmRelay(mcpServer.dependencies, agentStatusService, ozdashTicketsSnapshot, log)
+    installOzdashPmRelay(
+      mcpServer.dependencies,
+      agentStatusService,
+      ozdashTicketsSnapshot,
+      log,
+      join(app.getPath('userData'), TICKET_EVENTS_DIR)
+    )
   );
   // OZdash: Dock badge with the number of tasks that need attention.
   appScope.add(registerOzdashAttentionBadge());
