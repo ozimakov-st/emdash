@@ -86,6 +86,35 @@ describe('TuiAgentStates', () => {
     });
   });
 
+  it('marks the launch prompt working when the start hook skips it (fork)', () => {
+    const { tracker, agentStates } = createTracker();
+    const provider = {
+      hooks: {
+        kind: 'config' as const,
+        scope: 'global' as const,
+        supportedEvents: ['session' as const, 'start' as const, 'stop' as const],
+        startHookOnLaunchPrompt: false,
+      },
+    };
+
+    // Hooks active: the launch prompt still counts as working …
+    tracker.markInitialPromptSubmitted('conv-1', 'cursor', provider, 'review it', true);
+    expect(peek(agentStates.states.list)['conv-1']).toMatchObject({
+      status: 'working',
+      source: 'input',
+      providerId: 'cursor',
+    });
+    // … a typed prompt waits for the start hook …
+    tracker.markInputSubmitted('conv-2', provider, '\r', true);
+    expect(peek(agentStates.states.list)['conv-2']).toBeUndefined();
+    // … and the stop hook ends the launch turn.
+    tracker.applyCanonicalEvent('conv-1', 'cursor', { kind: 'status', type: 'stop' });
+    expect(peek(agentStates.states.list)['conv-1']).toMatchObject({
+      status: 'completed',
+      source: 'hook',
+    });
+  });
+
   it('publishes valid provider session ids through the sessions model', () => {
     const { tracker, sessions, onSessionIdChanged } = createTracker();
     produceCell(sessions.states.list, (draft) => {

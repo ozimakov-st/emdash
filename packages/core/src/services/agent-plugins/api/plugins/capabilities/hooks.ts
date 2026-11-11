@@ -38,6 +38,12 @@ export const hooksCapability = definePluginCapability<IHooksBehavior>()(
       supportedEvents: z.array(
         z.enum(['notification', 'stop', 'session', 'start', 'tool-use', 'tool-use-failure'])
       ),
+      /**
+       * Fork (ozimakov-st): false when the agent does not fire its start hook for the prompt
+       * it gets at launch (cursor-agent). The runtime then marks that prompt as working
+       * itself; later prompts still rely on the start hook. Default: true.
+       */
+      startHookOnLaunchPrompt: z.boolean().optional(),
     }),
     z.object({
       kind: z.literal('plugin'),

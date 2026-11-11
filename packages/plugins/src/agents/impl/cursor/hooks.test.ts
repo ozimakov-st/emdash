@@ -32,6 +32,8 @@ describe('Cursor hooks', () => {
       kind: 'config',
       scope: 'global',
       supportedEvents: ['session', 'start', 'stop'],
+      // Fork (ozimakov-st): no beforeSubmitPrompt for the command-line prompt.
+      startHookOnLaunchPrompt: false,
     });
     expect(hooks.resolveConfigRoots({ homeDir: '/home/user', env: {}, platform: 'linux' })).toEqual(
       ['/home/user/.cursor']

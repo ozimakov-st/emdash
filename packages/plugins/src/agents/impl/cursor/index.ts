@@ -43,6 +43,11 @@ export const plugin = definePlugin(
       // Declaring start suppresses Enter→working when hooks are installed; if
       // hook setup fails the runtime keeps the input fallback (see prepareHookEnv).
       supportedEvents: ['session', 'start', 'stop'],
+      // Fork (ozimakov-st): cursor-agent runs no beforeSubmitPrompt hook for the prompt
+      // given on its command line (only sessionStart, then stop at the end of the turn),
+      // so a task's first prompt would show Idle while the agent works. Mark it working at
+      // launch instead; stop clears it. Prompts typed later still fire beforeSubmitPrompt.
+      startHookOnLaunchPrompt: false,
     },
     hostDependency: {
       id: 'cursor',

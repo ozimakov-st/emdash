@@ -137,7 +137,9 @@ export class TuiAgentStates {
     if (
       startHooksActive &&
       provider?.hooks.kind !== 'none' &&
-      provider?.hooks.supportedEvents.includes('start')
+      provider?.hooks.supportedEvents.includes('start') &&
+      // Fork (ozimakov-st): cursor-agent fires no start hook for its launch prompt.
+      !(provider.hooks.kind === 'config' && provider.hooks.startHookOnLaunchPrompt === false)
     )
       return;
     this.setStatus(conversationId, { providerId, status: 'working', source: 'input' });
