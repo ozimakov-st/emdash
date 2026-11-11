@@ -29,6 +29,7 @@ import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
 import { OzdashAttentionIcon, ozdashAttentionRowClass } from './ozdash-attention';
 import { OzdashPmSessionBadge, OzdashPmSessionIcon } from './ozdash-pm-session-badge';
+import { OzdashQuickSwitchBadge, ozdashQuickSwitchDigit } from './ozdash-quick-switch';
 import { ozdashPmManagedRowClass } from './ozdash-sidebar-focus';
 import { OzdashTicketMarker } from './ozdash-ticket-marker';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
@@ -62,6 +63,9 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const isPm = isPmProjectInWindow(getProjectStore(projectId));
   // OZdash: highlight tasks that need Oleg (see ozdash-attention.tsx).
   const attention = taskAttentionLevel(task);
+  // OZdash: the Cmd+digit number while Cmd is held (see ozdash-quick-switch.tsx).
+  const quickDigit =
+    rowVariant === 'underProject' ? ozdashQuickSwitchDigit(projectId, taskId) : null;
 
   const openTask = () => {
     navigate(taskViewDef({ projectId, taskId }));
@@ -146,9 +150,15 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           </span>
         </SidebarMenuAction>
         <div className="ml-2 flex shrink-0 items-center justify-end gap-1.5">
-          {showLineChanges && <TaskGitDiffStats task={task} />}
-          {showPrStatus && <RenderPrBadge task={task} />}
-          <TaskSidebarTrailingSlot task={task} showTimestamp={showTimestamps} />
+          {quickDigit !== null ? (
+            <OzdashQuickSwitchBadge digit={quickDigit} />
+          ) : (
+            <>
+              {showLineChanges && <TaskGitDiffStats task={task} />}
+              {showPrStatus && <RenderPrBadge task={task} />}
+              <TaskSidebarTrailingSlot task={task} showTimestamp={showTimestamps} />
+            </>
+          )}
         </div>
       </SidebarMenuRow>
     </TaskContextMenu>

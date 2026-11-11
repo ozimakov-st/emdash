@@ -11,6 +11,7 @@ import {
 } from '@core/primitives/navigation/browser/navigation-hooks';
 import { cn } from '@core/primitives/styling/browser/cn';
 import { OzdashNavGroup } from './ozdash-nav-group';
+import { useOzdashQuickSwitchHint } from './ozdash-quick-switch';
 import { SidebarPinnedTaskList } from './pinned-task-list';
 import { ProjectsGroupLabel } from './projects-group-label';
 import {
@@ -31,6 +32,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { navigate } = useNavigate();
   const { currentView } = useWorkspaceSlots();
   const { isDragOver, onDragOver, onDragEnter, onDragLeave, onDrop } = useSidebarDrop();
+  useOzdashQuickSwitchHint(); // OZdash: Cmd+digit numbers on task rows while Cmd is held
 
   return (
     <div

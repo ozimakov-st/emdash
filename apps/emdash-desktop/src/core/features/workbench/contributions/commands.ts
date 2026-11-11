@@ -199,7 +199,8 @@ function defineTabIndexCommand<const TIndex extends number>(index: TIndex) {
     title: `Open Tab ${index}`,
     description: `Switch to tab ${index}`,
     category: 'Tab Navigation',
-    keybinding: keybinding.fixed(`Mod+${index}`),
+    // Fork (ozimakov-st): no Cmd+1…9 here; OZdash uses them to open sidebar tasks
+    // (ozdash/contributions/commands.ts). The commands stay in the palette.
   });
 }
 

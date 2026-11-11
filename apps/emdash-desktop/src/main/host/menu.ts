@@ -158,7 +158,8 @@ export function setupApplicationMenu(
           click: () => emitCommand('app.commandPalette'),
         },
         { type: 'separator' as const },
-        { role: 'resetZoom' as const },
+        // OZdash: Cmd+0 opens the 10th sidebar task, so Actual Size keeps no shortcut.
+        { role: 'resetZoom' as const, registerAccelerator: false },
         { role: 'zoomIn' as const },
         { role: 'zoomOut' as const },
         { type: 'separator' as const },

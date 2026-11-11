@@ -11,6 +11,7 @@ import {
 } from '@core/features/tasks/api/browser/task-state/task-selectors';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { applyHistoryEntry } from '@core/features/workbench/browser/nav-buttons';
+import { ozdashQuickSwitchImpl } from '@core/features/workbench/browser/sidebar/ozdash-quick-switch';
 import { useWorkspaceLayoutContext } from '@core/features/workbench/contributions/browser/layout-provider';
 import { openModal } from '@core/manifests/browser/modal-api';
 import { projectAvailabilityUi } from '@core/manifests/browser/project-availability-ui';
@@ -139,6 +140,8 @@ export function WindowScope({ children }: { readonly children: ReactNode }) {
     'workbench.zenMode': () => ({
       execute: () => toggleZenMode(),
     }),
+    // OZdash: Cmd+1…9, Cmd+0 open the first 10 sidebar tasks.
+    ...ozdashQuickSwitchImpl(),
   } satisfies ViewScopeImpl<typeof windowScope>;
 
   const { instance } = useViewScope(windowScope(), implementation);
