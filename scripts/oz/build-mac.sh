@@ -14,6 +14,11 @@ APP="$ROOT/apps/emdash-desktop/release/mac-arm64/OZdash.app"
 
 cd "$ROOT"
 pnpm install
+# Build the workspace packages first (@emdash/core, @emdash/plugins, …). The app build
+# bundles their dist/ output, not their sources, so a stale dist/ ships old agent code
+# (this once lost cursor --model and codex reasoning effort). The release workflows do
+# the same through the root `pnpm run build`.
+pnpm exec nx run-many -t build --exclude='@emdash/emdash-desktop,@emdash/workspace-server'
 cd apps/emdash-desktop
 CSC_IDENTITY_AUTO_DISCOVERY=false pnpm run package:mac -- --arm64 --publish never
 # Sign with the local "OZdash Local Signing" certificate when it exists

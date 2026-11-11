@@ -87,7 +87,9 @@ table; code in `ozdash/api/agent-palette.ts`). The file is read each time, so ed
   --approve-mcps --model <m>` (no effort flag: put it in the model id, for example
   `cursor-grok-4.6-high`). Effort applies in terminal mode only.
 
-- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
+- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). It builds the
+  workspace packages first: the app bundles their `dist/`, so skipping that step ships old
+  `@emdash/core` / `@emdash/plugins` code (missing cursor `--model`, codex effort). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
   originals. Run with `swift <script> <upstream png> <out png>`. Make the `.icns`
