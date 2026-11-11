@@ -178,7 +178,17 @@ describe('conversationLabel', () => {
   });
 
   it('shows only the agent when the title is empty or the same', () => {
-    expect(conversationLabel({ title: '', providerId: 'codex', model: null })).toBe('codex');
-    expect(conversationLabel({ title: 'Codex', providerId: 'codex', model: null })).toBe('codex');
+    expect(conversationLabel({ title: '', providerId: 'codex', model: 'gpt-6.1-sol' })).toBe(
+      'codex gpt-6.1-sol'
+    );
+    expect(conversationLabel({ title: 'Codex', providerId: 'codex', model: null })).toBe(
+      'codex (default model)'
+    );
+  });
+
+  it('says "default model" when none was passed to the agent', () => {
+    expect(conversationLabel({ title: 'review · cursor', providerId: 'cursor', model: null })).toBe(
+      'review · cursor · cursor (default model)'
+    );
   });
 });

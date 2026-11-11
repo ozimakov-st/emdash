@@ -117,13 +117,17 @@ export function listedConversations(
   return row.conversations.length > 1 ? row.conversations : [];
 }
 
-/** A conversation's label, for example `Review · cursor cursor-grok-4.6-high`. */
+/**
+ * A conversation's label, for example `Review · cursor cursor-grok-4.6-high`. With no model
+ * the agent CLI picks its own: `Review · cursor (default model)`.
+ */
 export function conversationLabel(
   conversation: Pick<TicketSessionConversation, 'title' | 'providerId' | 'model'>
 ): string {
-  const agent = [conversation.providerId, conversation.model].filter(Boolean).join(' ');
-  const title = conversation.title.trim();
-  return title && title.toLowerCase() !== agent.toLowerCase() ? `${title} · ${agent}` : agent;
+  const agent = `${conversation.providerId} ${conversation.model || '(default model)'}`;
+  const title = conversation.title.trim().toLowerCase();
+  const sameAsAgent = title === agent.toLowerCase() || title === conversation.providerId;
+  return title && !sameAsAgent ? `${conversation.title.trim()} · ${agent}` : agent;
 }
 
 /** The agent with the most conversations in `stats` (providerId -> count), or null. */
