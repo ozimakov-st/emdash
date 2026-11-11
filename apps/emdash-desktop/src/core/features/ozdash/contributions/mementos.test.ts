@@ -4,6 +4,8 @@ import {
   ozdashSidebarMemento,
   ozdashSidebarSchema,
   ozdashTicketsBoardMemento,
+  ozdashTicketSessionsMemento,
+  ozdashTicketSessionsSchema,
   ozdashTicketsBoardSchema,
   toggleNavOpen,
   toggleTicketPanel,
@@ -47,5 +49,17 @@ describe('ozdashTicketsBoardMemento', () => {
     expect(ozdashTicketsBoardSchema.parseJson(ozdashTicketsBoardSchema.serialize(state))).toEqual(
       state
     );
+  });
+});
+
+describe('ozdashTicketSessionsMemento', () => {
+  it('hides archived tasks by default, is persisted and reads back', () => {
+    expect(ozdashTicketSessionsMemento.default.showArchived).toBe(false);
+    expect(ozdashTicketSessionsMemento.retention.tier).toBe('persisted');
+    const stored = ozdashTicketSessionsSchema.serialize({ version: '1', showArchived: true });
+    expect(ozdashTicketSessionsSchema.parseJson(stored)).toEqual({
+      version: '1',
+      showArchived: true,
+    });
   });
 });

@@ -37,7 +37,9 @@ other tasks in all projects (not archived), with agent, project, live status and
 activity; the current task says "this task". Needs-input / error rows come first (attention
 colors), then working, then the rest. A task with two or more conversations (executor,
 reviewers) lists them under its row (`title · agent model`, live status). Click opens the
-task, or the task with that conversation selected.
+task, or the task with that conversation selected. When the ticket has archived tasks, a
+"Show archived (n)" toggle at the bottom (remembered) lists them dimmed with an `archived`
+label and a **Restore** button (the sidebar's Restore). MCP `restore_task` does the same.
 **PM relay:** when a conversation in a ticket's task (not the PM session) becomes
 awaiting-input, completed or error, and stays so for 20 s, OZdash types one line into the
 ticket's PM session (marker `pmSessionId`, else the file's `pm_session`; only if it exists

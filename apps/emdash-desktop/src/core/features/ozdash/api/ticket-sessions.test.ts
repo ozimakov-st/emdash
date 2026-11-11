@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  archivedTicketSessionCount,
   conversationLabel,
   listedConversations,
   mainProviderId,
@@ -83,6 +84,20 @@ describe('selectTicketSessions', () => {
     ]);
   });
 
+  it('includes archived tasks on request, after the live ones (fork)', () => {
+    const tasks = [
+      task('old', { archived: true, lastActivity: '2026-11-09T00:00:00Z' }),
+      task('live', { lastActivity: '2026-11-01T00:00:00Z' }),
+      task('other', { archived: true }),
+    ];
+    const markers = marked(['old', '7'], ['live', '7'], ['other', '8']);
+    expect(ids(selectTicketSessions(ticket(), tasks, markers))).toEqual(['live']);
+    expect(ids(selectTicketSessions(ticket(), tasks, markers, { includeArchived: true }))).toEqual([
+      'live',
+      'old',
+    ]);
+  });
+
   it('returns nothing when no task belongs to the ticket', () => {
     expect(selectTicketSessions(ticket(), [task('a')], marked())).toEqual([]);
   });
@@ -145,6 +160,28 @@ describe('ticketSessionRows', () => {
     expect(ticketSessionRows(ticket(), [task('pm', { archived: true })], marked(), 'pm')).toEqual(
       []
     );
+  });
+});
+
+describe('archivedTicketSessionCount', () => {
+  it("counts the ticket's archived tasks, the PM session too, not other tickets'", () => {
+    const tasks = [
+      task('pm', { archived: true }),
+      task('a', { archived: true }),
+      task('b', { archived: true }),
+      task('c'),
+      task('x', { archived: true }),
+    ];
+    const markers = marked(['a', '7'], ['c', '7'], ['x', '8']);
+    expect(archivedTicketSessionCount(ticket('emdash: b'), tasks, markers)).toBe(3);
+    expect(archivedTicketSessionCount(ticket(), [task('c')], markers)).toBe(0);
+  });
+
+  it('shows an archived PM session when archived tasks are included', () => {
+    const rows = ticketSessionRows(ticket(), [task('pm', { archived: true })], marked(), 'a', {
+      includeArchived: true,
+    });
+    expect(rows).toMatchObject([{ taskId: 'pm', role: 'pm', archived: true }]);
   });
 });
 

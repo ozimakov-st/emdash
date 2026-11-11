@@ -55,30 +55,57 @@ export function sessionSortGroup(task: Pick<TicketSessionTask, 'status' | 'atten
   return task.status === 'working' ? 1 : 2;
 }
 
+/** True when the task belongs to the ticket: its marker, or an `emdash:` ref in the file. */
+function isTicketTask(
+  ticket: Pick<TicketSummary, 'id'>,
+  fileIds: ReadonlySet<string>,
+  markers: ReadonlyMap<string, { ticket: { id: string } }>,
+  taskId: string
+): boolean {
+  return markers.get(taskId)?.ticket.id === ticket.id || fileIds.has(taskId);
+}
+
 /**
  * The ticket's sessions: tasks with its marker or named in its file, minus the PM
- * session and archived tasks. Needs-attention first, then working, then the rest; most
- * recent activity first inside each group.
+ * session. Archived tasks only with `includeArchived` (fork: "Show archived"), and then
+ * after all live ones. Needs-attention first, then working, then the rest; most recent
+ * activity first inside each group.
  */
 export function selectTicketSessions(
   ticket: Pick<TicketSummary, 'id' | 'pmSession' | 'searchText'>,
   tasks: readonly TicketSessionTask[],
-  markers: ReadonlyMap<string, { ticket: { id: string } }>
+  markers: ReadonlyMap<string, { ticket: { id: string } }>,
+  options: { includeArchived?: boolean } = {}
 ): TicketSessionTask[] {
   const fileIds = ticketFileTaskIds(ticket);
   return tasks
     .filter(
       (task) =>
-        !task.archived &&
+        (options.includeArchived || !task.archived) &&
         task.taskId !== ticket.pmSession &&
-        (markers.get(task.taskId)?.ticket.id === ticket.id || fileIds.has(task.taskId))
+        isTicketTask(ticket, fileIds, markers, task.taskId)
     )
     .sort(
       (a, b) =>
+        Number(a.archived) - Number(b.archived) ||
         sessionSortGroup(a) - sessionSortGroup(b) ||
         (b.lastActivity ?? '').localeCompare(a.lastActivity ?? '') ||
         a.taskId.localeCompare(b.taskId)
     );
+}
+
+/** How many of the ticket's tasks (the PM session too) are archived: the "Show archived (n)" count. */
+export function archivedTicketSessionCount(
+  ticket: Pick<TicketSummary, 'id' | 'pmSession' | 'searchText'>,
+  tasks: readonly TicketSessionTask[],
+  markers: ReadonlyMap<string, { ticket: { id: string } }>
+): number {
+  const fileIds = ticketFileTaskIds(ticket);
+  return tasks.filter(
+    (task) =>
+      task.archived &&
+      (task.taskId === ticket.pmSession || isTicketTask(ticket, fileIds, markers, task.taskId))
+  ).length;
 }
 
 /** The ticket whose file names this task in an `emdash: <task id>` ref, or null. */
@@ -90,21 +117,24 @@ export function ticketByFileRef<T extends Pick<TicketSummary, 'searchText'>>(
 }
 
 /**
- * The Sessions list: the PM session first (when it is open and not archived), then the
- * ticket's other tasks as `selectTicketSessions` sorts them. `current` marks the task
- * whose Ticket tab shows the list.
+ * The Sessions list: the PM session first (when it is open and not archived, or with
+ * `includeArchived`), then the ticket's other tasks as `selectTicketSessions` sorts them.
+ * `current` marks the task whose Ticket tab shows the list.
  */
 export function ticketSessionRows(
   ticket: Pick<TicketSummary, 'id' | 'pmSession' | 'searchText'>,
   tasks: readonly TicketSessionTask[],
   markers: ReadonlyMap<string, { ticket: { id: string } }>,
-  currentTaskId: string
+  currentTaskId: string,
+  options: { includeArchived?: boolean } = {}
 ): TicketSessionRow[] {
   const pm = ticket.pmSession
-    ? tasks.find((task) => task.taskId === ticket.pmSession && !task.archived)
+    ? tasks.find(
+        (task) => task.taskId === ticket.pmSession && (options.includeArchived || !task.archived)
+      )
     : undefined;
   const rows: TicketSessionRow[] = pm ? [{ ...pm, role: 'pm', current: false }] : [];
-  for (const task of selectTicketSessions(ticket, tasks, markers)) {
+  for (const task of selectTicketSessions(ticket, tasks, markers, options)) {
     rows.push({ ...task, role: 'peer', current: false });
   }
   return rows.map((row) => ({ ...row, current: row.taskId === currentTaskId }));

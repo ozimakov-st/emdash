@@ -65,3 +65,22 @@ export function toggleTicketPanel(
     ? { ...state, parkedOpen: !state.parkedOpen }
     : { ...state, archiveOpen: !state.archiveOpen };
 }
+
+const ozdashTicketSessionsV1Schema = z.object({
+  version: z.literal('1'),
+  /** True when the Ticket tab's Sessions list also shows archived tasks. */
+  showArchived: z.boolean(),
+});
+
+export const ozdashTicketSessionsSchema = defineVersionedSchema()
+  .initial('1', ozdashTicketSessionsV1Schema)
+  .build();
+
+export const ozdashTicketSessionsMemento = defineMemento({
+  id: 'ozdash.ticket-sessions',
+  subject: appSubject,
+  schema: ozdashTicketSessionsSchema,
+  // Archived tasks are hidden until "Show archived" is turned on.
+  default: { version: '1' as const, showArchived: false },
+  retention: { tier: 'persisted', maxAge: days(3650) },
+});
