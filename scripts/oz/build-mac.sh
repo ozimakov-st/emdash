@@ -18,7 +18,10 @@ pnpm install
 # bundles their dist/ output, not their sources, so a stale dist/ ships old agent code
 # (this once lost cursor --model and codex reasoning effort). The release workflows do
 # the same through the root `pnpm run build`.
-pnpm exec nx run-many -t build --exclude='@emdash/emdash-desktop,@emdash/workspace-server'
+# Clean dist/ first and skip the nx cache: old hashed chunks left in dist/ once broke
+# the app build ("Exported variable ... is not defined").
+rm -rf packages/*/dist
+pnpm exec nx run-many -t build --skip-nx-cache --exclude='@emdash/emdash-desktop,@emdash/workspace-server'
 cd apps/emdash-desktop
 CSC_IDENTITY_AUTO_DISCOVERY=false pnpm run package:mac -- --arm64 --publish never
 # Sign with the local "OZdash Local Signing" certificate when it exists
