@@ -96,8 +96,8 @@ Behavior:
   `latestOutput` from that conversation (unknown id = tool error); each `conversations`
   item also has `title` and `model` (PTY config model, else null).
 - fork (ozimakov-st): `create_conversation` `{ projectId, taskId, prompt, provider?, model?,
-  effort?, autoApprove? (default true), title? }` -> `{ conversationId, title, provider,
-  model, effort, autoApprove }` adds a terminal agent session to an existing task, in its
+  effort?, autoApprove? (default true), chatUi?, title? }` -> `{ conversationId, title, provider,
+  model, effort, autoApprove }` adds an agent session to an existing task, in its
   worktree (for example a reviewer next to the executor). It calls the same
   `createConversation` operation as the task UI's "new conversation" (injected as
   `createConversation` from `services.ts`), with create_task's provider / model / effort /
@@ -151,10 +151,12 @@ Behavior:
   which needs confirmation too, and an unopenable one rejects rather than returning an
   error state, so both reads sit inside a `try`.
 - `create_task` honors `project.pushOnCreate` ("Auto-push on create") and reads provider
-  preferences for the project's host. Terminal auto-approve uses the provider's saved
-  terminal setting unless explicitly overridden. Chat UI uses native ACP options instead;
-  an explicit model override needs a discovered model option id. MCP still defaults to
-  terminal mode unless `chatUi: true` is supplied.
+  preferences for the project's host. Fork (ozimakov-st): chat or terminal follows the
+  "New sessions start in" setting (OZ chat by default); `chatUi: true` forces chat and
+  `chatUi: false` forces the terminal. `autoApprove` defaults to true (pass `false` for
+  permission prompts) in both modes; the result reports the applied value. Chat UI uses
+  native ACP options; an explicit model override needs a discovered model option id.
+  `create_conversation` follows the same rules.
 - `create_task` refuses, before creating anything, what the new-task modal would block or
   silently drop: a new branch name that already exists locally, and a prompt for a terminal
   provider whose prompt delivery is not `argv` or `stdin-pipe`

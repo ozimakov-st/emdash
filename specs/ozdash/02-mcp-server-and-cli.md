@@ -156,11 +156,6 @@ Upstream hooks:
 
 ## Known gaps
 
-- `agents/integrations/mcp.md` is out of date in 3 places: it says `create_conversation`
-  adds "a terminal agent session", that "MCP still defaults to terminal mode unless
-  `chatUi: true`", and that terminal auto-approve "uses the provider's saved terminal
-  setting unless explicitly overridden". The code follows the session mode (default OZ
-  chat) and defaults `autoApprove` to true.
 - `scripts/oz/README.md` first paragraph still says the fork adds only "two more tools".
 - The brief lists `run/stop task script` and `rename` as tools: they exist (from PR #3086),
   but `emdash-oz` has no commands for `rename_task`, `run_task_script`,

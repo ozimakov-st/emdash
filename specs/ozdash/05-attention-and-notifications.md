@@ -91,8 +91,6 @@ Upstream hooks:
 
 ## Known gaps
 
-- The Notifications settings text still says the banner shows "while unfocused"; the fork
-  shows it always (AT-7).
 - The Settings "Preview sound" button still uses the renderer player, not `afplay`.
 - Old markers without `createdBy` that name a PM session are muted, so a few older
   Oleg-made tasks may be muted (AT-11, a guess by design).

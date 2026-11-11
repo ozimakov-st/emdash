@@ -88,8 +88,6 @@ Upstream hooks:
 
 ## Known gaps
 
-- The brief says icons show at 16 or 32 px (even pixel scale). The Ticket tab shows the
-  icon at 24 px (`ticket-panel.tsx`), a 1.5x scale.
 - Only tasks in projects open in this window are listed (same scope as the left sidebar).
 - Conversation sub-rows appear only for tasks whose conversations the renderer has loaded
   (tasks opened since start).

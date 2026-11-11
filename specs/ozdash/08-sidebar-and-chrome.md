@@ -36,7 +36,7 @@ and fast keyboard switching.
 |---|---|---|
 | SB-11 | Cmd+1 … Cmd+9, Cmd+0 open the first 10 task rows of the sidebar tree as shown (top to bottom). Pinned tasks and rows of collapsed projects are not counted. Commands `ozdash.quickSwitch1…10` (window scope). | Fast switching like browser tabs. |
 | SB-12 | Holding Cmd alone for 150 ms shows a number chip on those rows (in place of time / diff / PR). Release, any other key or window blur hides it. | Know which number is which. |
-| SB-13 | These shortcuts replace upstream "Open Tab 1…9" (`workbench.tab1…9` keep no keybinding; still in the palette) and View > Actual Size Cmd+0 (`registerAccelerator: false`). | No double binding. |
+| SB-13 | These shortcuts replace upstream "Open Tab 1…9" (`workbench.tab1…9` keep no keybinding; still in the palette) and View > Actual Size Cmd+0 (the item is custom and has no accelerator). | No double binding. |
 
 ## Settings / env switches
 
@@ -94,7 +94,6 @@ Upstream hooks:
 
 ## Known gaps
 
-- View > Actual Size still shows "⌘0" in the menu, but the key opens task 10.
 - A newly added project with no tasks is hidden in Focus view until it has a task (the
   footer shows "1 project hidden").
 - Until ticket markers load (a moment after start), PM-managed tasks count as direct and

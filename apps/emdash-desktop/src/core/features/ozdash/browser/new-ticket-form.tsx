@@ -298,7 +298,7 @@ export const NewTicketForm = observer(function NewTicketForm({
           </Field.Root>
           {!existingTask && (
             <Field.Root>
-              <Field.Label>{ticket ? 'Goal (optional)' : 'Description (optional)'}</Field.Label>
+              <Field.Label>Goal (optional)</Field.Label>
               <Textarea
                 value={description}
                 rows={5}

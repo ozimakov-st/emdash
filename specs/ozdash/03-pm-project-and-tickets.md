@@ -203,10 +203,6 @@ real vault is never touched): `api/tickets.test.ts`, `api/priority-palette.test.
   `create_task` with that ticket) sets it back to `active`. The brief says the way out of
   the archive is Restore -> parked. Decide: keep, or start only from `parked`
   (`startTicketContent` in `node/ticket-editor.ts`, one line).
-- The New ticket form labels the text field "Description (optional)"; Edit labels it
-  "Goal (optional)". The brief calls it Goal in both. Same file section (`## Goal`).
-- The brief says the PM project "is shown as 'PM' (Oleg's Work)". The code shows a `PM`
-  badge next to the project's own name; it does not rename the project.
 - OZ Tickets is always "connected", so the New Task dialog in every project now starts on
   "Based on: Issue" (before: PR or nothing in projects without an issue integration).
 - If the board re-sorts while the Edit dialog is open, the card can remount and close the

@@ -115,7 +115,7 @@ export const OzdashTicketPanel = observer(function OzdashTicketPanel({
         }}
       >
         <div className="flex items-center gap-1.5">
-          <TicketIcon ticket={ticket} size={24} />
+          <TicketIcon ticket={ticket} size={32} />
           <span className="shrink-0 font-semibold text-foreground-info">#{ticket.id}</span>
           <PriorityChip priority={ticket.priority} />
           {updated && (

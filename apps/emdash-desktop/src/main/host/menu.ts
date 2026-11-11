@@ -1,4 +1,4 @@
-import { app, clipboard, Menu, shell } from 'electron';
+import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
 import { desktopHostEvents } from '@core/features/workbench/node';
 import { MENU_ITEMS } from '@core/manifests/shared/menu-items';
 import {
@@ -159,7 +159,10 @@ export function setupApplicationMenu(
         },
         { type: 'separator' as const },
         // OZdash: Cmd+0 opens the 10th sidebar task, so Actual Size keeps no shortcut.
-        { role: 'resetZoom' as const, registerAccelerator: false },
+        {
+          label: 'Actual Size',
+          click: () => BrowserWindow.getFocusedWindow()?.webContents.setZoomLevel(0),
+        },
         { role: 'zoomIn' as const },
         { role: 'zoomOut' as const },
         { type: 'separator' as const },
