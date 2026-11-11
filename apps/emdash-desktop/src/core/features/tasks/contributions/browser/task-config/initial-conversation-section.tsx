@@ -81,6 +81,11 @@ export type InitialConversationState = {
    * auto-approve on for that provider.
    */
   applyPreset?: (preset: AgentPresetSelection) => void;
+  /**
+   * Fork (ozimakov-st): the last chip's model and effort for this provider, cleared by a
+   * hand-picked model. Chat sessions get them as ACP options (buildInitialConversation).
+   */
+  presetSelection?: { model: string | null; effort: string | null } | null;
   connectionId?: string;
   /** Whether to start this conversation as an ACP chat UI conversation. */
   useChatUi: boolean;
@@ -128,6 +133,10 @@ export function useInitialConversationState(
   // A preset for another provider: applied once the provider switch lands (the switch
   // itself resets model and effort).
   const [pendingPreset, setPendingPreset] = useState<AgentPresetSelection | null>(null);
+  const [presetSelection, setPresetSelection] = useState<{
+    model: string | null;
+    effort: string | null;
+  } | null>(null);
   const [draftOptions, setDraftOptions] = useState(options.initialOptions);
   const [issueMentionContexts, setIssueMentionContexts] = useState<Record<string, string>>({});
 
@@ -147,6 +156,7 @@ export function useInitialConversationState(
     setModel(null);
     setEffort(null);
     setPendingPreset(null);
+    setPresetSelection(null);
     setDraftOptions(undefined);
     setIssueMentionContexts({});
   } else if (providerChanged) {
@@ -154,6 +164,7 @@ export function useInitialConversationState(
     const pending = pendingPreset?.provider === providerId ? pendingPreset : null;
     setModel(pending?.model ?? null);
     setEffort(pending?.effort ?? null);
+    setPresetSelection(pending ? { model: pending.model, effort: pending.effort } : null);
     setPendingPreset(null);
     setDraftOptions(undefined);
   }
@@ -200,18 +211,21 @@ export function useInitialConversationState(
     setModel: (next) => {
       setModel(next);
       setEffort(null); // A hand-picked model drops the preset's effort.
+      setPresetSelection(null);
     },
     effort,
+    presetSelection,
     applyPreset: (preset) => {
       if (preset.provider === providerId) {
         setModel(preset.model);
         setEffort(preset.effort);
+        setPresetSelection({ model: preset.model, effort: preset.effort });
       } else {
         setPendingPreset(preset);
         setProviderOverride(preset.provider);
       }
-      // Presets name CLI models: they run in the terminal, not the chat UI.
-      if (useChatUi) launchSettings.setUseChatUi(false);
+      // Fork (ozimakov-st): the session mode stays as it is. In chat mode the model and
+      // effort become ACP options when the task is created (buildInitialConversation).
       const target = agents?.find((agent) => agent.id === preset.provider);
       if (agentSupportsAutoApprove(target?.capabilities, 'pty')) {
         void patchProviderSettings(

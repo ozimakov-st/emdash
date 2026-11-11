@@ -255,6 +255,13 @@ export const SETTINGS_SEARCH_INDEX: SettingsSearchEntry[] = [
     keywords: ['font family', 'typeface', 'geist', 'inter'],
   },
   {
+    id: 'session-mode',
+    label: 'New sessions start in',
+    tab: 'interface',
+    description: 'OZ chat, Emdash chat or terminal.',
+    keywords: ['oz chat', 'chat ui', 'terminal', 'tui', 'acp', 'conversation mode'],
+  },
+  {
     id: 'default-terminal-shell',
     label: 'Default terminal shell',
     tab: 'interface',

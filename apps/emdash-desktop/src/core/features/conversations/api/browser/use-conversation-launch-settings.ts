@@ -1,6 +1,10 @@
 import type { SerializedHostRef } from '@emdash/core/primitives/host/api';
 import { toast } from '@emdash/ui/react/primitives';
 import { useCallback, useState } from 'react';
+import {
+  normalizeSessionMode,
+  sessionModeForToggle,
+} from '@core/features/ozdash/api/chat/session-mode';
 import { useAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import {
   agentSupportsAcp,
@@ -23,16 +27,19 @@ export function useConversationLaunchSettings(
 ) {
   const key = providerId ? { host, providerId } : null;
   const { settings, ready } = useProviderSettings(key);
+  // Fork (ozimakov-st): the global OZdash session mode (Settings → Interface, default OZ
+  // chat) decides chat vs terminal; upstream used `preferredConversationType` (default pty).
   const {
-    value: preferredTransport,
+    value: interfaceSettings,
     isLoading: transportLoading,
     isSaving: transportSaving,
-    updateAsync: updatePreferredTransport,
-  } = useAppSettingsKey('preferredConversationType');
+    updateAsync: updateInterfaceSettings,
+  } = useAppSettingsKey('interface');
+  const sessionMode = normalizeSessionMode(interfaceSettings?.sessionMode);
   const [draft, setDraft] = useState(initialSettings);
   const isolated = initialSettings !== undefined;
   const useChatUi =
-    agentSupportsAcp(capabilities) && (draft?.useChatUi ?? preferredTransport === 'acp');
+    agentSupportsAcp(capabilities) && (draft?.useChatUi ?? sessionMode !== 'terminal');
   const transport = useChatUi ? 'acp' : 'pty';
   const supported = agentSupportsAutoApprove(capabilities, transport);
   const savedAutoApprove = settings.pty.autoApprove;
@@ -50,11 +57,13 @@ export function useConversationLaunchSettings(
     (useChatUi: boolean) => {
       if (isolated) setDraft((current) => current && { ...current, useChatUi });
       else
-        void updatePreferredTransport(useChatUi ? 'acp' : 'pty').catch((error) =>
+        void updateInterfaceSettings({
+          sessionMode: sessionModeForToggle(sessionMode, useChatUi),
+        }).catch((error) =>
           toast.error('Could not save conversation interface', { description: String(error) })
         );
     },
-    [isolated, updatePreferredTransport]
+    [isolated, updateInterfaceSettings, sessionMode]
   );
 
   return {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SESSION_MODE_DEFAULT, SESSION_MODES } from '@core/features/ozdash/api/chat/session-mode';
 import { UI_FONT_DEFAULT, UI_FONT_IDS } from '@core/features/ozdash/api/ui-font';
 import { COMMAND_CATALOG } from '@core/manifests/shared/command-catalog';
 import type {
@@ -33,6 +34,7 @@ const interfaceSettingsSchema = z.object({
   showLeftSidebarTimestamps: z.boolean(),
   hideContextBar: z.boolean(),
   uiFont: z.enum(UI_FONT_IDS).catch(UI_FONT_DEFAULT),
+  sessionMode: z.enum(SESSION_MODES).catch(SESSION_MODE_DEFAULT),
 });
 
 const themeSchema = z.enum(['emlight', 'emdark']).nullable().catch(null).optional().default(null);
@@ -66,6 +68,7 @@ export const interfaceSettingsContribution = defineSettingsContribution<
     showLeftSidebarTimestamps: true,
     hideContextBar: false,
     uiFont: UI_FONT_DEFAULT,
+    sessionMode: SESSION_MODE_DEFAULT,
   },
 });
 

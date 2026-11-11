@@ -1,5 +1,6 @@
 import type { PullRequest } from '@emdash/plugins/pull-requests/schemas';
 import { nextDefaultConversationTitle } from '@core/features/conversations/api/browser/conversation-title-utils';
+import { presetToAcpOptions } from '@core/features/ozdash/api/chat/acp-launch-options';
 import type { InitialConversationState } from '@core/features/tasks/contributions/browser/task-config/initial-conversation-section';
 import { extractIssueMentionTargets } from '@core/primitives/issues/api';
 import type { TaskConfig } from '@core/primitives/tasks/api';
@@ -49,7 +50,17 @@ export function buildInitialConversation(
         : {}),
     autoApprove: state.autoApprove,
     ...(type === 'acp'
-      ? { options: state.options }
+      ? {
+          // Fork (ozimakov-st): a preset's model and effort, as the agent's ACP options.
+          options: state.presetSelection
+            ? presetToAcpOptions(
+                provider,
+                state.presetSelection,
+                state.settings.catalogs,
+                state.options
+              ).options
+            : state.options,
+        }
       : {
           model: state.model ?? undefined,
           // Fork (ozimakov-st): effort from an agent preset.

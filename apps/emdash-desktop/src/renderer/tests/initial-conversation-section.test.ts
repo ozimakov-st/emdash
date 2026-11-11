@@ -132,6 +132,9 @@ vi.mock('@core/features/conversations/api/browser/provider-preferences', async (
   };
 });
 
+const CHAT_SETTINGS = { sessionMode: 'oz-chat' };
+const TERMINAL_SETTINGS = { sessionMode: 'terminal' };
+
 vi.mock('@core/features/settings/api/browser/use-app-settings-key', async () => {
   const { useSyncExternalStore } = await import('react');
   const listeners = new Set<() => void>();
@@ -144,12 +147,13 @@ vi.mock('@core/features/settings/api/browser/use-app-settings-key', async () => 
             listeners.delete(listener);
           };
         },
-        () => mocks.preferredConversationType
+        // Fork (ozimakov-st): the launch settings read `interface.sessionMode`.
+        () => (mocks.preferredConversationType === 'acp' ? CHAT_SETTINGS : TERMINAL_SETTINGS)
       ),
       isLoading: false,
       isSaving: false,
-      updateAsync: async (value: 'acp' | 'pty') => {
-        mocks.preferredConversationType = value;
+      updateAsync: async (value: { sessionMode: string }) => {
+        mocks.preferredConversationType = value.sessionMode === 'terminal' ? 'pty' : 'acp';
         for (const listener of listeners) listener();
       },
     }),

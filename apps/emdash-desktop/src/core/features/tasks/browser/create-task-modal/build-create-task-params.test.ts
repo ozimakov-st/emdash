@@ -50,6 +50,19 @@ describe('buildInitialConversation', () => {
     expect(buildInitialConversation({ ...state, useChatUi: true })).not.toHaveProperty('effort');
   });
 
+  it('turns a palette chip into ACP options in chat mode (fork)', () => {
+    const state = makeInitialConversationState(agent('codex'), false, {
+      useChatUi: true,
+      options: { mode: 'agent' },
+      presetSelection: { model: 'gpt-6.1-sol', effort: 'high' },
+    });
+    expect(buildInitialConversation(state)?.options).toEqual({
+      mode: 'agent',
+      model: 'gpt-6.1-sol',
+      reasoning_effort: 'high',
+    });
+  });
+
   it('uses the draft auto-approve value for supported providers', () => {
     expect(buildInitialConversation(makeInitialConversationState(agent('claude'), true))).toEqual(
       expect.objectContaining({ provider: 'claude', autoApprove: true })

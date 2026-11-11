@@ -57,6 +57,8 @@ export type InterfaceSettings = {
   hideContextBar: boolean;
   /** OZdash: UI (sans-serif) font; see core/features/ozdash/api/ui-font.ts. */
   uiFont: 'default' | 'geist' | 'system';
+  /** OZdash: how new agent sessions start; see core/features/ozdash/chat/api/session-mode.ts. */
+  sessionMode: 'oz-chat' | 'emdash-chat' | 'terminal';
 };
 
 export type ProviderCustomConfig = {
