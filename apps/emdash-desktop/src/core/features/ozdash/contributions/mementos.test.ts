@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   isTicketPanelOpen,
+  ozdashSidebarFocusMemento,
+  ozdashSidebarFocusSchema,
   ozdashSidebarMemento,
   ozdashSidebarSchema,
   ozdashTicketsBoardMemento,
@@ -8,6 +10,7 @@ import {
   ozdashTicketSessionsSchema,
   ozdashTicketsBoardSchema,
   toggleNavOpen,
+  toggleShowAll,
   toggleTicketPanel,
 } from './mementos';
 
@@ -60,6 +63,23 @@ describe('ozdashTicketSessionsMemento', () => {
     expect(ozdashTicketSessionsSchema.parseJson(stored)).toEqual({
       version: '1',
       showArchived: true,
+    });
+  });
+});
+
+describe('ozdashSidebarFocusMemento', () => {
+  it('starts in the Focus view and is persisted', () => {
+    expect(ozdashSidebarFocusMemento.default.showAll).toBe(false);
+    expect(ozdashSidebarFocusMemento.retention.tier).toBe('persisted');
+  });
+
+  it('toggles "show all" and reads back what it stored', () => {
+    const shown = toggleShowAll(ozdashSidebarFocusMemento.default);
+    expect(shown.showAll).toBe(true);
+    expect(toggleShowAll(shown).showAll).toBe(false);
+    expect(ozdashSidebarFocusSchema.parseJson(ozdashSidebarFocusSchema.serialize(shown))).toEqual({
+      version: '1',
+      showAll: true,
     });
   });
 });

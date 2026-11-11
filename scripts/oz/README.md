@@ -64,6 +64,12 @@ Tasks Oleg makes himself (in a repo, or "New task…" / OZ Tickets, marker
 `createdBy: "oleg"`) and PM sessions keep notifying. Old markers without `createdBy` count
 as PM-made when they name a PM session (`pmSessionId`). `OZDASH_MUTE_PM_TASKS=off` turns
 this off. Rule: `isMutedPmTask` in `mcp/api/ozdash-task-ticket.ts`.
+**Sidebar Focus view** (on by default): the PM project always shows; other projects show
+only with a direct task (not PM-managed, same rule as muting), and list only those. The
+open task (and project) always shows. A footer says what is hidden ("3 projects · 7 PM
+tasks hidden — Show all"); it and the eye button in the Projects header switch to "show
+all" (remembered), where PM-managed rows are dimmed. Search (⌘K) finds everything. Rule:
+`ozdash/api/sidebar-focus.ts`.
 **Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
 (title, Goal, priority). Save rewrites only the changed fields in place (a new priority
 clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and

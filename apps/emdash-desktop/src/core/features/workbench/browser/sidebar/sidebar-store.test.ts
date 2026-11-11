@@ -246,3 +246,53 @@ describe('SidebarStore project ordering', () => {
     expect(store.sidebarRows).toEqual([{ kind: 'project', projectId: 'project-1' }]);
   });
 });
+
+describe('SidebarStore Focus view (OZdash)', () => {
+  function focusStore(isOn: boolean, selectedTaskId?: string) {
+    const store = new SidebarStore(
+      projectManagerWithTasks([
+        { id: 'mixed', createdAt: '2026-01-02', taskIds: ['direct', 'pm-child'] },
+        { id: 'pm-only', createdAt: '2026-01-01', taskIds: ['pm-only-child'] },
+      ])
+    );
+    store.attachMemento(
+      mementoHandle({
+        version: '1',
+        expandedProjectIds: ['mixed', 'pm-only'],
+        projectOrder: [],
+        taskOrderByProject: {},
+        taskSortBy: 'created-at',
+      })
+    );
+    store.setFocusSource({
+      isOn: () => isOn,
+      isPmManagedTask: (taskId) => taskId === 'pm-child' || taskId === 'pm-only-child',
+      selected: () => ({ taskId: selectedTaskId }),
+    });
+    return store;
+  }
+
+  it('hides PM-managed tasks and projects without direct tasks', () => {
+    const store = focusStore(true);
+    expect(store.sidebarRows).toEqual([
+      { kind: 'project', projectId: 'mixed' },
+      { kind: 'task', projectId: 'mixed', taskId: 'direct' },
+    ]);
+    expect(store.focus?.hiddenProjects).toBe(1);
+    expect(store.focus?.hiddenPmTasks).toBe(2);
+  });
+
+  it('keeps the open task and its project', () => {
+    const store = focusStore(true, 'pm-only-child');
+    expect(store.visibleTaskEntries).toEqual([
+      { projectId: 'mixed', taskId: 'direct' },
+      { projectId: 'pm-only', taskId: 'pm-only-child' },
+    ]);
+  });
+
+  it('shows everything when the Focus view is off', () => {
+    const store = focusStore(false);
+    expect(store.focus).toBeNull();
+    expect(store.visibleTaskEntries).toHaveLength(3);
+  });
+});

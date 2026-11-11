@@ -11,6 +11,7 @@ import { configureDevPerfClient } from '@core/features/dev-perf/api/browser/clie
 import { installMonacoFacetBinder } from '@core/features/editor/browser/monaco/install-monaco-facet-binder';
 import { monacoBootstrap } from '@core/features/editor/browser/monaco/monaco-bootstrap';
 import { startAttentionBadge } from '@core/features/ozdash/api/browser/attention';
+import { ozdashSidebarFocusSource } from '@core/features/ozdash/api/browser/sidebar-focus';
 import { getProjectManagerStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { prefetchAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import { initSoundPlayer, soundPlayer } from '@core/features/settings/browser/sound-player';
@@ -145,6 +146,7 @@ async function bootstrap() {
     bootMark('memento-handles-ready');
     getNavigation().attachMemento(historyHandle, legacyNavigationHandle);
     getSidebarStore().attachMemento(sidebarHandle);
+    getSidebarStore().setFocusSource(ozdashSidebarFocusSource); // OZdash: Focus view
     wireNavigationTelemetry(getNavigation());
   });
   const sidebarInitialized = Promise.all([navigationRestored, projectsLoaded]).then(() => {

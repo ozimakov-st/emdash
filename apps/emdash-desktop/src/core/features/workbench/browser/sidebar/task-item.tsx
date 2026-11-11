@@ -30,6 +30,7 @@ import { selectCurrentPr } from '@root/src/core/services/pull-requests/api';
 import { PrBadge } from '@root/src/core/services/pull-requests/browser/components/pr-badge';
 import { OzdashAttentionIcon, ozdashAttentionRowClass } from './ozdash-attention';
 import { OzdashPmSessionBadge } from './ozdash-pm-session-badge';
+import { ozdashPmManagedRowClass } from './ozdash-sidebar-focus';
 import { OzdashTicketMarker } from './ozdash-ticket-marker';
 import { SidebarMenuAction, SidebarMenuRow } from './sidebar-primitives';
 
@@ -121,7 +122,8 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         className={cn(
           'group/row flex items-center justify-between px-1 py-1.5 h-8 gap-1',
           rowVariant === 'pinned' ? 'pl-2' : 'pl-8',
-          !isActive && ozdashAttentionRowClass(attention)
+          !isActive && ozdashAttentionRowClass(attention),
+          ozdashPmManagedRowClass(taskId, isActive)
         )}
         isActive={isActive}
         onMouseDown={(e) => e.preventDefault()}

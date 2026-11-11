@@ -1,5 +1,10 @@
 import { computed, makeAutoObservable, observable } from 'mobx';
-import { getPmProjectPath, withPmProjectFirst } from '@core/features/ozdash/api/browser/ozdash-pm';
+import {
+  getPmProjectPath,
+  isPmProjectInWindow,
+  withPmProjectFirst,
+} from '@core/features/ozdash/api/browser/ozdash-pm';
+import { sidebarFocus, type SidebarFocus } from '@core/features/ozdash/api/sidebar-focus';
 import { type ProjectStore } from '@core/features/projects/api/browser/stores/project';
 import type { ProjectManagerStore } from '@core/features/projects/api/browser/stores/project-manager';
 import { asAvailableProject } from '@core/features/projects/api/browser/stores/project-selectors';
@@ -43,6 +48,13 @@ function isVisibleRegularTask(task: TaskStore): boolean {
   );
 }
 
+/** Fork (ozimakov-st): live inputs of the OZdash Focus view (ozdash/api/browser/sidebar-focus.ts). */
+export type SidebarFocusSource = {
+  isOn: () => boolean;
+  isPmManagedTask: (taskId: string) => boolean;
+  selected: () => { projectId?: string; taskId?: string };
+};
+
 export type SidebarRow =
   | { kind: 'project'; projectId: string }
   | { kind: 'task'; projectId: string; taskId: string };
@@ -51,6 +63,7 @@ export class SidebarStore {
   private _handle: MementoHandle<WorkbenchSidebarState> | undefined;
   private _fallbackState: WorkbenchSidebarState = workbenchSidebarMemento.default;
   private readonly _revealedProjectIds = observable.set<string>();
+  private _focusSource: SidebarFocusSource | null = null;
 
   constructor(private readonly projectManager: ProjectManagerStore) {
     // `_handle` must stay observable: computeds reading `state` before the
@@ -58,14 +71,16 @@ export class SidebarStore {
     // and freeze at the fallback value forever.
     makeAutoObservable<
       SidebarStore,
-      '_fallbackState' | '_handle' | '_revealedProjectIds' | 'projectManager'
+      '_fallbackState' | '_handle' | '_revealedProjectIds' | 'projectManager' | '_focusSource'
     >(this, {
       _fallbackState: false,
       _handle: observable.ref,
+      _focusSource: observable.ref,
       _revealedProjectIds: false,
       projectManager: false,
       expandedProjectIds: computed.struct,
       sidebarRows: computed,
+      focus: computed,
       pinnedSidebarEntries: computed,
     });
   }
@@ -106,10 +121,31 @@ export class SidebarStore {
     return withPmProjectFirst(sorted, getPmProjectPath());
   }
 
+  setFocusSource(source: SidebarFocusSource): void {
+    this._focusSource = source;
+  }
+
+  /** Fork (ozimakov-st): what the Focus view hides; null when it is off ("show all"). */
+  get focus(): SidebarFocus | null {
+    const source = this._focusSource;
+    if (!source?.isOn()) return null;
+    return sidebarFocus({
+      projects: this.orderedProjects.map((project) => ({
+        projectId: project.id,
+        isPm: isPmProjectInWindow(project),
+        taskIds: this.visibleTaskIdsForProject(project.id),
+      })),
+      isPmManagedTask: source.isPmManagedTask,
+      selected: source.selected(),
+    });
+  }
+
   get sidebarRows(): SidebarRow[] {
     const rows: SidebarRow[] = [];
+    const focus = this.focus;
     for (const project of this.orderedProjects) {
       const projectId = project.id;
+      if (focus && !focus.isProjectShown(projectId)) continue;
       rows.push({ kind: 'project', projectId });
       const context = asAvailableProject(project);
       if (this.expandedProjectIds.has(projectId) && context) {
@@ -121,7 +157,7 @@ export class SidebarStore {
           ? this.mergeTaskOrder(projectId, tasks)
           : this.sortTasksForSidebar(tasks);
         for (const task of ordered) {
-          if (task.data.isPinned) continue;
+          if (task.data.isPinned || (focus && !focus.isTaskShown(task.data.id))) continue;
           rows.push({ kind: 'task', projectId, taskId: task.data.id });
         }
       }

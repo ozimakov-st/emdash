@@ -31,6 +31,31 @@ export function toggleNavOpen(state: OzdashSidebarState): OzdashSidebarState {
   return { ...state, navOpen: !state.navOpen };
 }
 
+const ozdashSidebarFocusV1Schema = z.object({
+  version: z.literal('1'),
+  /** False = Focus view (PM project + projects with direct tasks); true = show everything. */
+  showAll: z.boolean(),
+});
+
+export const ozdashSidebarFocusSchema = defineVersionedSchema()
+  .initial('1', ozdashSidebarFocusV1Schema)
+  .build();
+
+export type OzdashSidebarFocusState = typeof ozdashSidebarFocusSchema.Type;
+
+/** The sidebar Focus view switch (see ozdash/api/sidebar-focus.ts). Focus is on by default. */
+export const ozdashSidebarFocusMemento = defineMemento({
+  id: 'ozdash.sidebar-focus',
+  subject: appSubject,
+  schema: ozdashSidebarFocusSchema,
+  default: { version: '1' as const, showAll: false },
+  retention: { tier: 'persisted', maxAge: days(3650) },
+});
+
+export function toggleShowAll(state: OzdashSidebarFocusState): OzdashSidebarFocusState {
+  return { ...state, showAll: !state.showAll };
+}
+
 const ozdashTicketsBoardV1Schema = z.object({
   version: z.literal('1'),
   /** True when the Tickets board's Parked panel is open. */

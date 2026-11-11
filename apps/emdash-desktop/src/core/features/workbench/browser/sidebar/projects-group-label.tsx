@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { getSidebarStore } from '@core/features/workbench/contributions/browser/app-stores';
 import { useOpenModal } from '@core/manifests/browser/modal-api';
 import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
+import { OzdashFocusToggle } from './ozdash-sidebar-focus';
 
 export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
   const openAddProjectModal = useOpenModal('addProjectModal');
@@ -12,6 +13,7 @@ export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
     <div className="flex h-[40px] items-center justify-between pr-2.5 pl-5">
       <MicroLabel className="font-medium text-foreground-tertiary-passive">Projects</MicroLabel>
       <div className="flex items-center gap-1">
+        <OzdashFocusToggle />
         <DropdownMenu.Root>
           <Tooltip.Root>
             <DropdownMenu.Trigger

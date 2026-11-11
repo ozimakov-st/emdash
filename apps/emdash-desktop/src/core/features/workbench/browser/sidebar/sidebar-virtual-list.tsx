@@ -25,6 +25,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { mergeShownOrder } from '@core/features/ozdash/api/sidebar-focus';
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { getTaskStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
 import { taskViewDef } from '@core/features/tasks/contributions/views';
@@ -34,6 +35,7 @@ import {
   useViewParams,
   useWorkspaceSlots,
 } from '@core/primitives/navigation/browser/navigation-hooks';
+import { OzdashFocusFooter } from './ozdash-sidebar-focus';
 import { SidebarProjectItem } from './project-item';
 import { SidebarTaskItem } from './task-item';
 
@@ -166,7 +168,9 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       const ids = getSidebarStore()
         .orderedProjects.map((p) => (p.state === 'unregistered' ? p.id : (p.data?.id ?? '')))
         .filter(Boolean);
-      const oldIdx = ids.indexOf(aParsed.projectId);
+      // OZdash: reorder the shown projects only; Focus-hidden ones keep their places.
+      const shownIds = rows.flatMap((r) => (r.kind === 'project' ? [r.projectId] : []));
+      const oldIdx = shownIds.indexOf(aParsed.projectId);
       if (oldIdx === -1) return;
       const projectsAbove = rows
         .slice(0, insertionRowIdx)
@@ -174,7 +178,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       let newIdx = projectsAbove;
       if (newIdx > oldIdx) newIdx -= 1;
       if (newIdx === oldIdx) return;
-      getSidebarStore().setProjectOrder(arrayMove(ids, oldIdx, newIdx));
+      getSidebarStore().setProjectOrder(mergeShownOrder(ids, arrayMove(shownIds, oldIdx, newIdx)));
     } else if (oParsed.kind === 'task' && oParsed.projectId === aParsed.projectId) {
       const projectId = aParsed.projectId;
       const taskIds = rows
@@ -189,7 +193,14 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       let newIdx = isAbove ? overTaskIdx : overTaskIdx + 1;
       if (newIdx > oldIdx) newIdx -= 1;
       if (newIdx === oldIdx) return;
-      getSidebarStore().setTaskOrder(projectId, arrayMove(taskIds, oldIdx, newIdx));
+      // OZdash: Focus-hidden tasks keep their places.
+      getSidebarStore().setTaskOrder(
+        projectId,
+        mergeShownOrder(
+          getSidebarStore().visibleTaskIdsForProject(projectId),
+          arrayMove(taskIds, oldIdx, newIdx)
+        )
+      );
     }
   }
 
@@ -232,6 +243,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
               );
             })}
           </div>
+          <OzdashFocusFooter />
         </div>
       </SortableContext>
       <DragOverlay dropAnimation={null}>
