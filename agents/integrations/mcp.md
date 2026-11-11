@@ -69,7 +69,7 @@ Behavior:
   fresh `McpServer` is built per request
 - tools: `list_projects`, `add_project`, `list_tasks`, `create_task`, `rename_task`,
   `archive_task`, `delete_task`, `run_task_script`, `stop_task_script`, `send_task_message`,
-  `get_task_status`, `create_conversation` (fork)
+  `get_task_status`, `create_conversation` (fork), `restore_task` (fork)
 - `add_project` adds a local git repository, like the Add Project dialog's "open a folder"
   mode: it expands `~`, resolves the real path, calls the projects controller's
   `inspectProjectPath`, returns an existing project at that path with `created: false`,
@@ -105,6 +105,12 @@ Behavior:
   `resolvePtyAutoApprove`). It refuses an archived task, a provider that cannot take a
   prompt at launch, and a project the app does not hold open (the session would stop with
   the tool's lease). Default title: `<Provider> (n)`.
+- fork (ozimakov-st): `restore_task` `{ projectId, taskId }` -> `{ taskId, restored: true,
+  warning? }` undoes `archive_task` with the UI's Restore operation (`TaskService.restoreTask`).
+  Archive keeps the worktree, branch and conversations, so the task works again. When the app
+  holds the project open it also calls `provisionWorkspace` (as opening the task does), so
+  `create_conversation` / `send_task_message` work at once; otherwise `warning` says to open
+  the task in Emdash. A task that is not archived, or not found, is a tool error.
 - neither tool opens a project attachment: releasing a lease the tool took itself could
   stop the very sessions it wants to reach. They reach the host through the runtime
   broker, so local and SSH workspaces work the same.

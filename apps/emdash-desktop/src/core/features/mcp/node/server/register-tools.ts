@@ -605,6 +605,49 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
     })
   );
 
+  // Fork (ozimakov-st): undo archive_task, like Restore in the Emdash UI.
+  server.registerTool(
+    'restore_task',
+    {
+      title: 'Restore task',
+      description:
+        'Restores an archived Emdash task (the same as Restore in the Emdash UI). Its worktree, ' +
+        'branch and conversations are kept by archive, so the task works again; when the ' +
+        'project is open in Emdash, its workspace is also prepared for new sessions.',
+      inputSchema: { projectId: projectIdInput, taskId: taskIdInput },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    guarded(dependencies, 'restore_task', async ({ projectId, taskId }) => {
+      const [row] = await dependencies.db
+        .select({ id: tasks.id, archivedAt: tasks.archivedAt })
+        .from(tasks)
+        .where(and(eq(tasks.id, taskId), eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+        .limit(1);
+      if (!row) return errorResult(`Task not found in project ${projectId}: ${taskId}`);
+      if (!row.archivedAt) return errorResult(`Task ${taskId} is not archived`);
+
+      await dependencies.tasks.restoreTask(taskId);
+      // Like opening the restored task in the UI: register its session again, so
+      // create_conversation and send_task_message work right away. Only while the app
+      // holds the project open; otherwise opening the task in Emdash does it.
+      let warning: string | undefined;
+      if (dependencies.projects.requireAttached(projectId).success) {
+        const provisioned = await dependencies.tasks.provisionWorkspace(taskId);
+        if (!provisioned.success) {
+          const { error } = provisioned;
+          warning = `The task was restored, but its worktree is not ready: ${
+            'message' in error && error.message ? error.message : error.type
+          }`;
+        }
+      } else {
+        warning =
+          'The task was restored. The project is not open in Emdash; open the task there to ' +
+          'start its sessions.';
+      }
+      return textResult({ taskId, restored: true, ...(warning && { warning }) });
+    })
+  );
+
   server.registerTool(
     'delete_task',
     {

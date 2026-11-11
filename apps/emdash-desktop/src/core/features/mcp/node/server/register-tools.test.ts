@@ -216,6 +216,7 @@ describe('buildEmdashMcpServer', () => {
       'list_projects',
       'list_tasks',
       'rename_task',
+      'restore_task',
       'run_task_script',
       'send_task_message',
       'stop_task_script',
@@ -866,6 +867,73 @@ describe('buildEmdashMcpServer', () => {
         prompt: 'x',
       });
       expect(archivedResult.content[0].text).toContain('is archived');
+    });
+  });
+
+  describe('archive_task / restore_task (fork)', () => {
+    function taskDeps(row: Record<string, unknown> | null, attached = true) {
+      const archiveTask = vi.fn(async () => {});
+      const restoreTask = vi.fn(async () => {});
+      const provisionWorkspace = vi.fn(async () => ok({ path: '/worktrees/task-1' }));
+      const deps = dependencies({
+        db: fakeDb(row ? [row] : []) as never,
+        projects: {
+          track: () => cell({ kind: 'attached' }),
+          requireAttached: () => (attached ? ok({}) : { success: false }),
+        } as never,
+        tasks: { archiveTask, restoreTask, provisionWorkspace } as never,
+      });
+      return { deps, archiveTask, restoreTask, provisionWorkspace };
+    }
+
+    it('archives a task (a ticket child is a normal task)', async () => {
+      const { deps, archiveTask } = taskDeps({ id: 'task-1', archivedAt: null });
+      expect(
+        parse(await callTool(deps, 'archive_task', { projectId: 'p', taskId: 'task-1' }))
+      ).toEqual({ taskId: 'task-1', archived: true });
+      expect(archiveTask).toHaveBeenCalledWith('p', 'task-1', expect.anything());
+    });
+
+    it('restores an archived task and prepares its workspace', async () => {
+      const { deps, restoreTask, provisionWorkspace } = taskDeps({
+        id: 'task-1',
+        archivedAt: '2026-11-10 10:00:00',
+      });
+      expect(
+        parse(await callTool(deps, 'restore_task', { projectId: 'p', taskId: 'task-1' }))
+      ).toEqual({ taskId: 'task-1', restored: true });
+      expect(restoreTask).toHaveBeenCalledWith('task-1');
+      expect(provisionWorkspace).toHaveBeenCalledWith('task-1');
+    });
+
+    it('restores without preparing the workspace when the project is not open', async () => {
+      const { deps, restoreTask, provisionWorkspace } = taskDeps(
+        { id: 'task-1', archivedAt: '2026-11-10 10:00:00' },
+        false
+      );
+      const result = parse(
+        await callTool(deps, 'restore_task', { projectId: 'p', taskId: 'task-1' })
+      ) as Record<string, unknown>;
+      expect(result).toMatchObject({ taskId: 'task-1', restored: true });
+      expect(result.warning).toContain('not open in Emdash');
+      expect(restoreTask).toHaveBeenCalledWith('task-1');
+      expect(provisionWorkspace).not.toHaveBeenCalled();
+    });
+
+    it('refuses a task that is not archived, or not found', async () => {
+      const live = taskDeps({ id: 'task-1', archivedAt: null });
+      const notArchived = await callTool(live.deps, 'restore_task', {
+        projectId: 'p',
+        taskId: 'task-1',
+      });
+      expect(notArchived.isError).toBe(true);
+      expect(notArchived.content[0].text).toBe('Task task-1 is not archived');
+      expect(live.restoreTask).not.toHaveBeenCalled();
+
+      const missing = taskDeps(null);
+      const gone = await callTool(missing.deps, 'restore_task', { projectId: 'p', taskId: 'x' });
+      expect(gone.isError).toBe(true);
+      expect(gone.content[0].text).toBe('Task not found in project p: x');
     });
   });
 
