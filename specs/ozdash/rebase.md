@@ -9,6 +9,8 @@ changed a lot in the high-risk files (see [upstream-touchpoints.md](upstream-tou
 ## 0. Before you start
 
 - Work in `~/Projects/emdash`, branch `oz/mcp-server`, clean tree (`git status`).
+  Agents: follow [agent-runbook.md](agent-runbook.md) instead; it works in a separate
+  worktree, because the live app runs from this checkout's `release/` folder.
 - Read the "Rebase notes" of each spec file once.
 - Do not build into, or quit, the running OZdash until step 6. Do not test against the
   real vault.
@@ -223,6 +225,7 @@ Safe setup for vault writes: start the new build from a terminal with
 | Agent status events | Chime, attention, relay and the cursor launch fix depend on `agent:event` payloads and the `idle_prompt` marker. | Tests in 05 / 06; smoke tests #22-#25. |
 | Seen flag resets | New upstream code that sets `agentStatusSeen: 1` on reset brings back "marks vanish on restart". | `grep -rn "agentStatusSeen: 1" apps/emdash-desktop/src`. |
 | Preload changes | `window.ozdash` lives in the preload; a dev reload does not pick it up. | Rebuild and restart. |
+| Build in the main checkout | The live app runs from `~/Projects/emdash/apps/emdash-desktop/release/mac-arm64/OZdash.app`; `build-mac.sh` there overwrites the running bundle. | Build in a separate worktree (agent-runbook.md step 2), or only after Oleg quit the app. |
 | Old app still running | A second instance cannot take port 8212 and scans to 8213; `emdash-oz` keeps talking to the old app on 8212. | Quit the old OZdash before starting the new build. |
 | `OZDASH_PM_PROJECT_PATH` / `OZDASH_VAULT_PATH` | Read from the app's environment; a Dock launch ignores shell exports. | Start from a terminal to test with a scratch vault. |
 | Real vault writes | Board clicks commit and push the real vault repo. | Use a scratch vault for write tests (step 7). |

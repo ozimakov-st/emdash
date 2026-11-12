@@ -21,6 +21,8 @@ upstream, or re-applied feature by feature, with confidence.
   MCP tools offered in upstream PR #3086).
 - Agents that work on OZdash: read the spec of the area you change, then
   [upstream-touchpoints.md](upstream-touchpoints.md) and [rebase.md](rebase.md).
+- An agent that brings OZdash onto the latest upstream: follow
+  [agent-runbook.md](agent-runbook.md).
 
 ## Principles
 
@@ -71,6 +73,7 @@ upstream, or re-applied feature by feature, with confidence.
 | [11-git-exec-reliability.md](11-git-exec-reliability.md) | Git commands always settle |
 | [upstream-touchpoints.md](upstream-touchpoints.md) | Every upstream file the fork changes, with risk and how to re-apply |
 | [rebase.md](rebase.md) | Step-by-step rebase, checks and manual smoke list |
+| [agent-runbook.md](agent-runbook.md) | Instructions for an agent session that moves OZdash onto the latest upstream, builds, tests and hands over |
 
 Each spec has: Requirements (numbered, testable), Settings / env switches, Contracts,
 Implementation map, Tests, Rebase notes, Known gaps.
