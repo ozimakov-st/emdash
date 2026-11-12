@@ -2,14 +2,16 @@
 
 Every file the fork changes since the merge base `592281113`, generated from
 `git diff --name-status -M 592281113..HEAD` and `git diff --numstat` (2026-11-10, HEAD
-`49d298e52`).
+`49d298e52`). Updated by hand on 2026-11-12 for the ticket shortcuts and the board
+double-click (03 TK-36…38, 04 TV-10): 5 more files; line counts of older rows are as of
+`49d298e52`.
 
-- Total: 273 files, +26656 / -392 lines.
-- **Fork-owned** (121 files): under `features/ozdash/`, `scripts/oz/`, or a new file named
+- Total: 278 files (+26656 / -392 lines as of `49d298e52`).
+- **Fork-owned** (125 files): under `features/ozdash/`, `scripts/oz/`, or a new file named
   `ozdash*` / `oz-*`. Listed at the end, grouped by feature. They conflict only when an
   import they use moves.
-- **Outside fork-owned paths** (152 files): the table below. Risk: **16 high, 45 med,
-  91 low**.
+- **Outside fork-owned paths** (153 files): the table below. Risk: **16 high, 45 med,
+  92 low**.
 
 `src/` = `apps/emdash-desktop/src/`. Feature numbers = spec files (`02` =
 [02-mcp-server-and-cli.md](02-mcp-server-and-cli.md)).
@@ -153,13 +155,14 @@ git grep -n -e "Fork (ozimakov-st)" -e "OZdash" -- apps packages ':!**/features/
 | 107 | `src/core/features/workbench/browser/sidebar/sidebar-store.ts` | modified | 42+/3- | 03,08 | hook | high | orderedProjects ends with withPmProjectFirst(); focus source + `focus` computed; skip hidden projects/tasks in rows. |
 | 108 | `src/core/features/workbench/browser/sidebar/sidebar-virtual-list.tsx` | modified | 15+/3- | 08 | hook | med | Drag reorder uses mergeShownOrder; render OzdashFocusFooter. |
 | 109 | `src/core/features/workbench/browser/sidebar/task-item.tsx` | modified | 30+/4- | 03,04,05,08 | hook | high | Attention row class + icon; PM session icon/badge; ticket marker; PM-managed dim; Cmd-digit badge replaces trailing slot while Cmd is held. |
-| 110 | `src/core/features/workbench/browser/window-scope.tsx` | modified | 10+/0- | 03,08 | hook | med | `presentation` of app.newTask = 'New Ticket' in the PM project; spread ozdashQuickSwitchImpl(). |
+| 110 | `src/core/features/workbench/browser/window-scope.tsx` | modified | 13+/0- | 03,04,08 | hook | med | `presentation` of app.newTask = 'New Ticket' in the PM project; spread ozdashQuickSwitchImpl() and ozdashTicketShortcutsImpl() (⌥⌘B, ⌥⌘T). |
 | 111 | `src/core/features/workbench/contributions/commands.ts` | modified | 2+/1- | 08 | behavior | low | Remove `keybinding: Mod+<n>` from tab index commands. |
 | 112 | `src/core/features/workbench/contributions/palette.ts` | modified | 1+/2- | 08 | delete | low | Remove the Give Feedback palette item. |
 | 113 | `src/core/features/workbench/contributions/settings.ts` | modified | 6+/0- | 09,10 | hook | low | interface schema + defaults: uiFont, sessionMode (with .catch). |
-| 114 | `src/core/manifests/browser/scope-catalog.ts` | modified | 3+/1- | 08 | hook | low | windowScope + OZDASH_COMMAND_DEFS. |
+| 114 | `src/core/manifests/browser/scope-catalog.ts` | modified | 3+/1- | 03,04,08 | hook | low | windowScope + OZDASH_COMMAND_DEFS. |
 | 115 | `src/core/manifests/node/controllers.ts` | modified | 7+/1- | 02 | hook | low | `mcpSelfServer` in the controller context; pass resolveSelfServer. |
-| 116 | `src/core/manifests/shared/command-catalog.ts` | modified | 2+/0- | 08 | hook | low | COMMAND_CATALOG + OZDASH_COMMAND_DEFS. |
+| 116 | `src/core/manifests/shared/command-catalog.ts` | modified | 2+/0- | 03,04,08 | hook | low | COMMAND_CATALOG + OZDASH_COMMAND_DEFS (quick switch, ⌥⌘B, ⌥⌘T). |
+| 116a | `src/core/manifests/shared/command-palette-catalog.ts` | modified | 2+/0- | 03,04 | hook | low | Import and append `...OZDASH_COMMAND_PALETTE_ITEMS` (Open Tickets Board, Toggle Ticket Panel in ⌘K). |
 | 117 | `src/core/manifests/shared/memento-catalog.ts` | modified | 12+/0- | 03,04,08,09 | hook | low | Register 5 ozdash mementos. |
 | 118 | `src/core/primitives/app-identity/api/app-identity.ts` | modified | 13+/6- | 01 | behavior | med | Set stable values: com.emdash.oz, OZdash, emdash-oz, EmdashOZ, emdash-oz-dev, ozdash; add AUTO_UPDATE_DISABLED = true. |
 | 119 | `src/core/primitives/app-identity/browser/emdash-logo.tsx` | modified | 17+/9- | 01 | behavior | med | Replace wordmark paths with `python3 scripts/oz/ozdash-wordmark.py --paths`; keep `accentColor` prop. |
@@ -227,7 +230,7 @@ git grep -n -e "Fork (ozimakov-st)" -e "OZdash" -- apps packages ':!**/features/
 | `src/core/features/mcp/node/server/ozdash-task-ticket-store.ts` | 167+/0- |
 | `src/core/features/mcp/node/server/ozdash-ticket-task-hook.test.ts` | 64+/0- |
 
-### 03 PM project and tickets (42 files)
+### 03 PM project and tickets (46 files)
 
 | File | Lines |
 |---|---|
@@ -235,6 +238,7 @@ git grep -n -e "Fork (ozimakov-st)" -e "OZdash" -- apps packages ':!**/features/
 | `src/core/features/ozdash/api/browser/oz-tickets-integration.ts` | 104+/0- |
 | `src/core/features/ozdash/api/browser/ozdash-pm.test.ts` | 100+/0- |
 | `src/core/features/ozdash/api/browser/ozdash-pm.ts` | 87+/0- |
+| `src/core/features/ozdash/api/browser/ticket-shortcuts.ts` | 56+/0- |
 | `src/core/features/ozdash/api/browser/tickets-store.test.ts` | 202+/0- |
 | `src/core/features/ozdash/api/browser/tickets-store.ts` | 310+/0- |
 | `src/core/features/ozdash/api/node/oz-tickets-issue-provider.test.ts` | 83+/0- |
@@ -245,6 +249,8 @@ git grep -n -e "Fork (ozimakov-st)" -e "OZdash" -- apps packages ':!**/features/
 | `src/core/features/ozdash/api/ticket-icon.ts` | 205+/0- |
 | `src/core/features/ozdash/api/ticket-issues.test.ts` | 242+/0- |
 | `src/core/features/ozdash/api/ticket-issues.ts` | 207+/0- |
+| `src/core/features/ozdash/api/ticket-shortcuts.test.ts` | 135+/0- |
+| `src/core/features/ozdash/api/ticket-shortcuts.ts` | 75+/0- |
 | `src/core/features/ozdash/api/tickets.test.ts` | 349+/0- |
 | `src/core/features/ozdash/api/tickets.ts` | 433+/0- |
 | `src/core/features/ozdash/browser/expandable-text.tsx` | 46+/0- |
@@ -257,6 +263,7 @@ git grep -n -e "Fork (ozimakov-st)" -e "OZdash" -- apps packages ':!**/features/
 | `src/core/features/ozdash/contributions/browser.ts` | 11+/0- |
 | `src/core/features/ozdash/contributions/mementos.test.ts` | 85+/0- |
 | `src/core/features/ozdash/contributions/mementos.ts` | 131+/0- |
+| `src/core/features/ozdash/contributions/palette.ts` | 11+/0- |
 | `src/core/features/ozdash/node/link-ticket-task.test.ts` | 187+/0- |
 | `src/core/features/ozdash/node/link-ticket-task.ts` | 109+/0- |
 | `src/core/features/ozdash/node/ticket-creator.test.ts` | 319+/0- |

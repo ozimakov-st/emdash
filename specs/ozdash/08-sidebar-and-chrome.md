@@ -52,6 +52,21 @@ and fast keyboard switching.
 - `mergeShownOrder(allIds, shownIdsInNewOrder)` keeps hidden ids in place.
 - Command ids `ozdash.quickSwitch1` … `ozdash.quickSwitch10` (`Mod+1` … `Mod+9`, `Mod+0`).
 
+All fork shortcuts (fixed bindings, window scope, defined in
+`ozdash/contributions/commands.ts`):
+
+| Chord | Command | Spec | Why this chord |
+|---|---|---|---|
+| ⌘1 … ⌘9, ⌘0 | `ozdash.quickSwitch1…10` | SB-11 | like browser tabs; upstream tab / zoom bindings removed (SB-13) |
+| ⌥⌘B | `ozdash.openTicketsBoard` | 03 TK-36 | B = Board; ⌘⇧B is upstream's Open Browser (task scope) |
+| ⌥⌘T | `ozdash.toggleTicketPanel` | 04 TV-10 | T = Ticket; ⌘⇧I is DevTools on Windows/Linux and close to ⌥⌘I (DevTools on macOS) |
+
+Checked free on 2026-11-12: the app's keybinding registry (all `keybinding.fixed` /
+`keybinding.settings` in `src/core`), the app menu (`main/host/menu.ts`: roles reload,
+forceReload, toggleDevTools ⌥⌘I, zoom, fullscreen ⌃⌘F, hide ⌘H / ⌥⌘H, window menu),
+macOS system shortcuts, and the terminal (xterm does not send ⌘ chords to the shell on
+macOS). The catalog test `command-catalog.test.ts` fails on a same-scope clash.
+
 ## Implementation map
 
 Fork-owned: `ozdash/api/sidebar-focus.ts`, `ozdash/api/browser/sidebar-focus.ts`,
@@ -88,7 +103,8 @@ Upstream hooks:
   Re-apply by intent: wrap the 3 nav items, drop the bottom bar, add the fork slots in the
   task row (attention icon, PM icon, badge, marker, Cmd-digit badge).
 - If upstream rebinds Cmd+digit or Cmd+0 elsewhere (tabs, zoom, panes), remove that
-  binding again; the fork owns Cmd+1…9 and Cmd+0.
+  binding again; the fork owns Cmd+1…9 and Cmd+0. It also owns ⌥⌘B and ⌥⌘T (table in
+  Contracts): if upstream takes one of them, move the fork command to a free chord.
 - If upstream adds new items to the sidebar footer, decide: inside More, or removed.
 - If upstream moves the "Open in" menu or Activity badge, keep Mod+O working.
 

@@ -44,7 +44,8 @@ git switch -c oz/rebase-$D oz/mcp-server
 
 ## 3. Choose a path
 
-History today: 12 MCP commits -> merge of upstream (`07fc11edd`) -> 81 `oz:` commits.
+History today: 12 MCP commits -> merge of upstream (`07fc11edd`) -> `oz:` commits (81 up to
+`49d298e52`, more since; count them with `git log --oneline 07fc11edd..oz/mcp-server | wc -l`).
 A plain `git rebase upstream/main` replays the 12 old MCP commits against new upstream
 and loses the conflict fixes made in the merge. So do it in two steps.
 
@@ -57,7 +58,7 @@ git diff 592281113 07fc11edd | git apply --3way --index
 #   fix conflicts with 02-mcp-server-and-cli.md, then:
 git commit -m "feat(mcp): built-in MCP server (squash of the PR #3086 commits)"
 
-# Step A2: replay the 81 oz commits on top.
+# Step A2: replay the oz commits (everything after the merge) on top.
 git switch oz/rebase-$D
 git rebase --onto oz/rebase-$D-base 07fc11edd
 ```
@@ -68,7 +69,7 @@ re-apply", keep upstream's new code and add the fork hook back. Then
 
 ### Path B: re-apply in chunks (upstream changed a lot)
 
-Do step A1 (the MCP squash commit on `upstream/main`). Then cherry-pick the 81 `oz:`
+Do step A1 (the MCP squash commit on `upstream/main`). Then cherry-pick the `oz:`
 commits in their original order, one chunk at a time. After each chunk: typecheck and the
 tests of the features in it. Each chunk is a working state of the fork.
 
@@ -83,6 +84,7 @@ tests of the features in it. Each chunk is a working state of the fork.
 | 7 | 04 Sessions, 02 create_conversation + restore_task, 06 relay, 01 build | `fe7cd7e4c c5efa4bb9 22789507b 04162f889 1182d8271 d412e1060 185f21f57 b5d9f19aa e8a46ddb9 ff49b4404 a9757f7f9 0a76522bc ddd9eb0ca 37699cb8b 1186f04c2` |
 | 8 | 09 OZ chat, 01 build | `f3fc33e51 ecd1a35b1 7789c0568 2d072198f 218da5d1d c5c7d217c f33c52a6f` |
 | 9 | 05 mute, 08 Focus view + Cmd+digit | `e08218922 f34cf763d 2ae7ee28e 49d298e52` |
+| 10 | specs, small fixes, 03/04 ticket shortcuts + double-click, and every later commit | `9b9dabd34 b5ff86b81 ba58b565d 9f0842324`, then the rest of `git log --reverse --format=%h 9f0842324..oz-pre-rebase-$D` |
 
 `git cherry-pick <commits of one chunk>`. If a commit no longer fits, do not force the
 patch: re-implement it from its spec (Requirements + Implementation map), then
@@ -196,6 +198,9 @@ Safe setup for vault writes: start the new build from a terminal with
 | 31 | Chat tab menu: "Show as Emdash chat" switches the view; "New … session in Terminal" works | OC-3 |
 | 32 | Settings > Interface: UI font Geist applies at once; Emdash chat text stays Inter | UF-1, UF-4 |
 | 33 | Settings > Interface: "New sessions start in" = Terminal makes the next MCP task a terminal | OC-1, MCP-11 |
+| 34 | From a task in another project (also with the terminal focused), ⌥⌘B opens the PM project on the Tickets board; the sidebar Tickets button tooltip shows ⌥⌘B; ⌘K "Open Tickets Board" works | TK-36 |
+| 35 | In a task with a ticket, ⌥⌘T opens the right sidebar on the Ticket tab, ⌥⌘T again closes the sidebar; the Ticket toggle tooltip shows ⌥⌘T. In a task without a ticket ⌥⌘T does nothing. ⌘⇧B still opens the in-app browser | TV-10 |
+| 36 | Board: one click opens the popup (a short moment later); double-click on a card with a live PM session opens it (no popup); double-click on a parked row asks "Start ticket #… ?" (Cancel does nothing; Start opens a PM session, scratch vault); dragging a card still reorders; Enter on a focused card opens the popup at once | TK-37, TK-38 |
 
 ## 8. Finish
 
@@ -213,6 +218,7 @@ Safe setup for vault writes: start the new build from a terminal with
 | Keychain prompt per rebuild | Self-signed cert, no Apple Team ID: macOS asks for "OZdash Safe Storage" after each build. | Click Always Allow. Without `make-signing-cert.sh` the app is ad hoc signed and asks more often. |
 | Unsigned app | electron-builder flips fuses and breaks the signature: "Code Signature Invalid" crash. | Use `build-mac.sh`, never `package:mac` alone. |
 | Cmd+digit overrides | Upstream binds Cmd+1…9 (tabs) and Cmd+0 (zoom). A rebase can bring a binding back, and then two commands fight. | Check `workbench/contributions/commands.ts` and `main/host/menu.ts`; smoke test #28. |
+| New upstream shortcut on ⌥⌘B / ⌥⌘T | The fork's Open Tickets Board / Toggle Ticket Panel stop working in the scope where upstream's binding wins. | `git grep -n -e "Alt'], 'KeyB'" -e "Alt'], 'KeyT'" -e "Alt+B" -e "Alt+T" -- apps/emdash-desktop/src`; table in 08 Contracts; smoke tests #34, #35. |
 | Chat transport events | OZ chat reads ACP state keys and turn item kinds by name. A rename upstream gives empty or "unknown" rows, not a type error. | Smoke test #30; compare `ozdash/api/chat/*` with `packages/core/src/runtimes/acp/api/models/`. |
 | Agent status events | Chime, attention, relay and the cursor launch fix depend on `agent:event` payloads and the `idle_prompt` marker. | Tests in 05 / 06; smoke tests #22-#25. |
 | Seen flag resets | New upstream code that sets `agentStatusSeen: 1` on reset brings back "marks vanish on restart". | `grep -rn "agentStatusSeen: 1" apps/emdash-desktop/src`. |

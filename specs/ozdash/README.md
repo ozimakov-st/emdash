@@ -60,12 +60,12 @@ upstream, or re-applied feature by feature, with confidence.
 |---|---|
 | [01-identity-build.md](01-identity-build.md) | App name, ids, data dir, no auto-update, branding, signing, build script, secrets |
 | [02-mcp-server-and-cli.md](02-mcp-server-and-cli.md) | Built-in MCP server, all tools, `emdash-oz` CLI contract |
-| [03-pm-project-and-tickets.md](03-pm-project-and-tickets.md) | PM project, Tickets board, lifecycle, New / Edit ticket, flash, priority, icons, vault sync, OZ Tickets source |
-| [04-ticket-side-view.md](04-ticket-side-view.md) | Ticket tab in task views, Sessions list, ticket chip and marker |
+| [03-pm-project-and-tickets.md](03-pm-project-and-tickets.md) | PM project, Tickets board, lifecycle, New / Edit ticket, flash, priority, icons, vault sync, OZ Tickets source, ⌥⌘B board shortcut, double-click to open / start |
+| [04-ticket-side-view.md](04-ticket-side-view.md) | Ticket tab in task views (⌥⌘T), Sessions list, ticket chip and marker |
 | [05-attention-and-notifications.md](05-attention-and-notifications.md) | Amber marks, Dock badge, chime + banner, muting PM-managed tasks |
 | [06-pm-relay.md](06-pm-relay.md) | Child status changes reported to the PM (event files) |
 | [07-agent-palette-and-auto-approve.md](07-agent-palette-and-auto-approve.md) | Presets, any model id, effort, auto-approve by default |
-| [08-sidebar-and-chrome.md](08-sidebar-and-chrome.md) | Removed distractions, More group, PM rows, Focus view, Cmd+digit |
+| [08-sidebar-and-chrome.md](08-sidebar-and-chrome.md) | Removed distractions, More group, PM rows, Focus view, Cmd+digit, table of all fork shortcuts |
 | [09-oz-chat.md](09-oz-chat.md) | OZ chat renderer, session modes, chat without permission prompts |
 | [10-ui-font.md](10-ui-font.md) | UI font setting (Inter / Geist / system) |
 | [11-git-exec-reliability.md](11-git-exec-reliability.md) | Git commands always settle |

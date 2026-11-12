@@ -33,6 +33,7 @@ right sidebar:  ┌ Ticket ─────────────────�
 | TV-7 | "Show archived (n)" at the bottom (hidden when n = 0; state remembered in memento `ozdash.ticket-sessions`) lists archived tasks dimmed with an `archived` label and a **Restore** button (the sidebar's Restore). | Undo a PM's archive by hand. |
 | TV-8 | A child task with a marker shows `Ticket #<id>` in its sidebar row (ClipboardList icon; tooltip `Ticket #<id>: <title> (PM session: <name>)`). | Child tasks are recognizable. |
 | TV-9 | A child task with a marker shows a header chip `Ticket #<id>` + title (cut to 40 chars). Click opens the PM session task; disabled when that task does not exist. | One click to the PM. |
+| TV-10 | **⌥⌘T** (command `ozdash.toggleTicketPanel`, "Toggle Ticket Panel") does what a click on the titlebar Ticket toggle does: opens the right sidebar on the Ticket tab, or closes the right sidebar when the Ticket tab shows. Only in a task that has a ticket (TV-1); elsewhere the key does nothing and the command is hidden in ⌘K. Works with a terminal, chat or browser focused. The Ticket toggle tooltip shows `Ticket #<id> ⌥⌘T`. | Peek at the ticket without the mouse. |
 
 ## Settings / env switches
 
@@ -51,6 +52,11 @@ right sidebar:  ┌ Ticket ─────────────────�
 ## Implementation map
 
 Fork-owned:
+- `ozdash/api/ticket-shortcuts.ts` (TV-1 `taskTicket`, TV-10 `ticketPanelTarget`,
+  `currentTaskOf`), `ozdash/api/browser/ticket-shortcuts.ts` (TV-10 window-scope handler:
+  `chrome.commands.toggleSidebarTab('ticket')`), `ozdash/contributions/commands.ts`
+  (`ozdash.toggleTicketPanel`, fixed `code(['Mod','Alt'],'KeyT')`),
+  `ozdash/contributions/palette.ts`.
 - `ozdash/browser/ticket-panel.tsx` (top block), `ozdash/browser/ticket-sessions-panel.tsx`
   (Sessions), `ozdash/api/ticket-sessions.ts` (pick + sort, archived count, labels),
   `ozdash/contributions/browser.ts` (`OzdashTicketSidebarToggle`, `OzdashTicketPanel`),
@@ -67,6 +73,8 @@ Upstream hooks:
 | `tasks/browser/view/task-sidebar.tsx` | `{activeTab === 'ticket' && <OzdashTicketPanel … />}` |
 | `tasks/browser/task-titlebar.tsx` | `<OzdashTicketChip>`, `<OzdashNoTicketChip>` after the linked-issue badge; `<OzdashTicketSidebarToggle>` after Conversations |
 | `workbench/browser/sidebar/task-item.tsx` | `<OzdashTicketMarker taskId>` |
+| `workbench/browser/window-scope.tsx` | `...ozdashTicketShortcutsImpl()` (TV-10, shared with 03 TK-36) |
+| `manifests/shared/command-palette-catalog.ts` | `...OZDASH_COMMAND_PALETTE_ITEMS` |
 
 ## Tests
 
@@ -74,6 +82,8 @@ Upstream hooks:
   PM first, archived excluded / counted, sort, labels incl. `(default model)`).
 - `tasks/api/browser/stores/task-chrome-store.test.ts` (the `ticket` tab is stored and read back).
 - `mcp/api/ozdash-task-ticket.test.ts` (chip and tooltip texts).
+- `ozdash/api/ticket-shortcuts.test.ts` (TV-1 lookup by PM session / marker / file ref;
+  TV-10 target only in a task with a ticket).
 - No browser tests for the panel UI.
 
 ## Rebase notes
@@ -81,6 +91,9 @@ Upstream hooks:
 - If upstream adds a sidebar tab or changes `SidebarTab` / the `tasks.chrome` schema,
   re-add `'ticket'` in both places (a value missing from the enum resets the stored chrome).
 - If upstream redesigns the titlebar toggle group, put the Ticket toggle last in that group.
+- TV-10 calls `chrome.commands.toggleSidebarTab('ticket')`, the same call upstream's
+  ⌘⇧1/2/3 use. If upstream renames it, follow `task.sidebarChanges` in `task-scope.tsx`.
+  If upstream binds ⌥⌘T, choose a new chord (see 03 Rebase notes).
 - Conversation sub-rows open a tab with `paneLayout.open('conversation', …)`; if upstream
   renames the pane API, follow the command palette's "open conversation" code.
 - The Sessions list reads live status from the same MobX stores as the left sidebar
@@ -88,6 +101,8 @@ Upstream hooks:
 
 ## Known gaps
 
+- TV-10 works once the ticket list has loaded (a moment after start; the Ticket toggle
+  appears at the same time).
 - Only tasks in projects open in this window are listed (same scope as the left sidebar).
 - Conversation sub-rows appear only for tasks whose conversations the renderer has loaded
   (tasks opened since start).

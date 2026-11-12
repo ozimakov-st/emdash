@@ -73,6 +73,12 @@ all" (remembered), where PM-managed rows are dimmed. Search (⌘K) finds everyth
 **⌘1…⌘9, ⌘0** open the first 10 task rows of the sidebar tree (top to bottom); holding ⌘
 shows their numbers. They replace the upstream "Open Tab 1…9" shortcuts (still in the
 palette) and ⌘0 "Actual Size". Rule: `ozdash/api/quick-switch.ts`.
+**⌥⌘B** opens the Tickets board from anywhere (also in ⌘K: "Open Tickets Board"). **⌥⌘T**
+in a task with a ticket opens the Ticket tab, or closes the right sidebar when it shows
+("Toggle Ticket Panel"). ⌘⇧B stays upstream's Open Browser. **Double-click** a card or a
+Parked row: opens the ticket's live PM session, else asks "Start ticket #<id> — <title>?"
+(Start = the Start button). A single click opens the popup after 220 ms, so the two do not
+fight. Rule: `ozdash/api/ticket-shortcuts.ts`.
 **Edit** (popup and Ticket panel) opens the New ticket form prefilled from the file
 (title, Goal, priority). Save rewrites only the changed fields in place (a new priority
 clears `rank:`), sets `updated:`, adds the Log line `Edited in OZdash (<fields>)` and

@@ -43,6 +43,9 @@ reads and writes the ticket files in the vault.
 | TK-15 | Drag a card to reorder it inside its priority group in one column only (not while searching, not in side panels). Drop writes ranks 10, 20, 30… for that group, one sync (`tickets: reorder P<n> (OZdash)`), no Log line, no `updated` change. | Manual order without noise. |
 | TK-16 | Park button on every non-parked, non-archived card (-> `parked`, Log `Parked in OZdash`). | Quick pause. |
 | TK-17 | "New task…" on an open card opens a project menu (PM project not listed), then the New Task dialog for that project with the ticket preselected as an OZ Tickets issue. | Start a child for a ticket. |
+| TK-36 | **⌥⌘B** (command `ozdash.openTicketsBoard`, "Open Tickets Board") opens the PM project on its Tickets board from anywhere (any project, task, settings; also with a terminal, chat or the in-app browser focused). Same result as the sidebar Tickets button. The Tickets button tooltip shows the shortcut; the command is in the ⌘K list (aliases tickets, board, kanban, pm). Hidden when no project is the PM project. | One key to the PM home. |
+| TK-37 | Double-click a card or a Parked row: when the ticket has a live PM session (`pm_session` names a task in the PM project that is not archived), open it (same as "Open session"). Else a small dialog asks "Start ticket #<id> — <title>?" with "This makes it active and opens a PM session." and [Cancel] [Start] (Start has focus). Start = the Start path (TK-19: active, `/oz-pm <id>`), then OZdash opens the session. Archive rows do nothing on double-click. | Fast way into a ticket, no stray starts. |
+| TK-38 | Single click vs double-click: a mouse click opens the ticket popup (TK-13) after 220 ms; a second click in that time cancels it, so the popup does not flash. A slow double-click closes a popup that already opened. Enter / Space on a focused card or row open the popup at once (as before). Double-clicks on buttons inside the card or row (Park, Start, Archive, New task…) and in menus do nothing extra. Drag and drop is unchanged. | Click and double-click do not fight. |
 
 ### Lifecycle
 
@@ -152,17 +155,20 @@ Fork-owned (`src/core/features/ozdash/`):
 
 | Layer | Files |
 |---|---|
-| pure rules | `api/tickets.ts` (types, channels, columns, sort, priority, lifecycle helpers), `api/priority-palette.ts`, `api/ticket-icon.ts`, `api/ticket-issues.ts` |
+| pure rules | `api/tickets.ts` (types, channels, columns, sort, priority, lifecycle helpers), `api/priority-palette.ts`, `api/ticket-icon.ts`, `api/ticket-issues.ts`, `api/ticket-shortcuts.ts` (TK-36 target `pmProjectIdIn`, TK-37 `ticketDoubleClickAction`, `startTicketQuestion`) |
 | main | `node/ticket-parser.ts`, `node/ticket-editor.ts`, `node/ticket-creator.ts`, `node/vault-sync.ts`, `node/tickets-service.ts`, `node/ticket-icons.ts`, `node/link-ticket-task.ts`, `api/node/oz-tickets-issue-provider.ts`; `src/main/host/ozdash-tickets.ts` (IPC, PM session launch, MCP hook) |
-| renderer | `api/browser/ozdash-pm.ts`, `api/browser/tickets-store.ts`, `api/browser/oz-tickets-integration.ts`, `browser/tickets-board.tsx`, `new-ticket-form.tsx`, `no-ticket-chip.tsx`, `priority-control.tsx`, `expandable-text.tsx`, `ticket-icon.tsx`, `open-ticket-task.ts`, `contributions/browser.ts`, `contributions/mementos.ts` |
+| renderer | `api/browser/ozdash-pm.ts`, `api/browser/tickets-store.ts`, `api/browser/oz-tickets-integration.ts`, `browser/tickets-board.tsx` (TK-37/38: `StartTicketDialog`, `useClickOrDoubleClick`), `new-ticket-form.tsx`, `no-ticket-chip.tsx`, `priority-control.tsx`, `expandable-text.tsx`, `ticket-icon.tsx`, `open-ticket-task.ts`, `contributions/browser.ts`, `contributions/mementos.ts` |
+| shortcuts (TK-36) | `contributions/commands.ts` (`ozdash.openTicketsBoard`, fixed `code(['Mod','Alt'],'KeyB')`), `contributions/palette.ts` (⌘K items), `api/browser/ticket-shortcuts.ts` (`ozdashTicketShortcutsImpl`, window-scope handlers) |
 | sidebar | `workbench/browser/sidebar/ozdash-tickets-button.tsx`, `ozdash-pm-session-badge.tsx` |
 
 Upstream hooks: `sidebar-store.ts` (`withPmProjectFirst`), `project-item.tsx`,
 `active-project.tsx`, `main-panel.tsx`, `task-list.tsx`, `task-list-empty-state.tsx`,
 `create-task-modal.tsx`, `use-create-task-state.ts`, `use-create-task-callback.ts`,
 `issue-selector.tsx`, `use-connected-issue-providers.ts`, `integrations-provider.tsx`,
-`issues/node/registry.ts`, `linked-issue.ts`, `window-scope.tsx`, `services.ts`,
-`preload.ts`, `memento-catalog.ts`. Details: [upstream-touchpoints.md](upstream-touchpoints.md).
+`issues/node/registry.ts`, `linked-issue.ts`, `window-scope.tsx` (also
+`...ozdashTicketShortcutsImpl()`), `scope-catalog.ts` + `command-catalog.ts`
+(`OZDASH_COMMAND_DEFS`), `command-palette-catalog.ts` (`OZDASH_COMMAND_PALETTE_ITEMS`),
+`services.ts`, `preload.ts`, `memento-catalog.ts`. Details: [upstream-touchpoints.md](upstream-touchpoints.md).
 
 ## Tests
 
@@ -174,7 +180,10 @@ real vault is never touched): `api/tickets.test.ts`, `api/priority-palette.test.
 `node/ticket-parser.test.ts`, `node/ticket-editor.test.ts`, `node/ticket-creator.test.ts`,
 `node/vault-sync.test.ts` (real git + bare remote), `node/tickets-service.test.ts`,
 `node/ticket-icons.test.ts`, `node/link-ticket-task.test.ts`,
-`contributions/mementos.test.ts`. Upstream test mocks: `renderer/tests/archive-availability.test.ts`,
+`contributions/mementos.test.ts`, `api/ticket-shortcuts.test.ts` (TK-36 board target,
+TK-37 open vs confirm vs none, confirm text). The upstream catalog tests
+(`manifests/shared/command-catalog.test.ts`, `command-palette-catalog.test.ts`) check that
+the new chords do not clash in the same scope and that the ⌘K items are registered. Upstream test mocks: `renderer/tests/archive-availability.test.ts`,
 `renderer/tests/task-list-empty-state.test.ts`, `use-connected-issue-providers.test.ts`,
 `integrations-provider.test.ts`. No browser tests for the board UI.
 
@@ -192,6 +201,12 @@ real vault is never touched): `api/tickets.test.ts`, `api/priority-palette.test.
   open the ticket form (it does when it goes through the task modal).
 - `preload.ts`: the `ozdash` bridge is appended at the end; keep channel names equal to
   `OZDASH_TICKETS_CHANNELS`.
+- TK-36 uses ⌥⌘B because upstream binds ⌘⇧B to Open Browser (task scope). If upstream
+  later binds ⌥⌘B (or ⌥⌘T, see 04), pick a new free chord in
+  `ozdash/contributions/commands.ts` and update the specs; a task-scope binding with the
+  same chord would win inside tasks.
+- If upstream renames `defineCommandPaletteCatalog` or the palette item lists, re-add
+  `OZDASH_COMMAND_PALETTE_ITEMS` next to the other lists.
 - Never run the app against the real vault while testing a rebase: use
   `OZDASH_VAULT_PATH` (+ `OZDASH_PM_PROJECT_PATH`) on a scratch copy in its own git repo,
   and `OZDASH_TICKET_ICONS=off`.
@@ -207,5 +222,11 @@ real vault is never touched): `api/tickets.test.ts`, `api/priority-palette.test.
   "Based on: Issue" (before: PR or nothing in projects without an issue integration).
 - If the board re-sorts while the Edit dialog is open, the card can remount and close the
   dialog (rare).
+- TK-38: macOS double-click speed can be slower than 220 ms. Then the popup opens first and
+  the double-click closes it again (a short flash). A longer delay would make every single
+  click feel slow.
+- TK-37 decides "live PM session" from the PM project's task list in this window; a PM
+  session that is not loaded yet counts as missing (the dialog asks; Start then opens the
+  existing session anyway, since the main process checks again).
 - Icon generation uses Oleg's Claude login and runs his Claude hooks; a few seconds per
   icon on first start.
