@@ -12,15 +12,15 @@ import { useTaskTicketInfo } from '@core/features/mcp/api/browser/ozdash-task-ti
 import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { priorityColor } from '@core/features/ozdash/api/priority-palette';
-import { ticketByFileRef } from '@core/features/ozdash/api/ticket-sessions';
+import { taskTicket } from '@core/features/ozdash/api/ticket-shortcuts';
 import {
   isFlashPriority,
   relativeUpdated,
-  ticketForTask,
   type TicketSummary,
 } from '@core/features/ozdash/api/tickets';
 import { getProjectManagerStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
+import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { ExpandableText } from './expandable-text';
 import { EditTicketDialog } from './new-ticket-form';
@@ -42,11 +42,8 @@ function useTaskTicket(taskId: string) {
   useEffect(() => {
     ticketsStore.ensureStarted();
   }, []);
-  const found = ticketForTask(taskId, ticketsStore.tickets, marker?.ticket.id ?? null);
-  if (found) return found;
-  // A child linked by `/oz-ticket-link` has no marker, only a ref in the ticket file.
-  const linked = ticketByFileRef(taskId, ticketsStore.tickets);
-  return linked ? { ticket: linked, role: 'child' as const } : null;
+  // PM session, marker, or (`/oz-ticket-link`) only a ref in the ticket file.
+  return taskTicket(taskId, ticketsStore.tickets, marker?.ticket.id ?? null);
 }
 
 const STATUS_LABEL: Record<TicketSummary['status'], string> = {
@@ -75,7 +72,10 @@ export const OzdashTicketSidebarToggle = observer(function OzdashTicketSidebarTo
           </ToggleGroup.Item>
         }
       />
-      <Tooltip.Content>Ticket #{found.ticket.id}</Tooltip.Content>
+      <Tooltip.Content>
+        Ticket #{found.ticket.id}{' '}
+        <BoundShortcut command="ozdash.toggleTicketPanel" variant="keycaps" />
+      </Tooltip.Content>
     </Tooltip.Root>
   );
 });

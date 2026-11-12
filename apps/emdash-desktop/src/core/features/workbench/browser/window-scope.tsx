@@ -2,6 +2,7 @@ import { toast } from '@emdash/ui/react/primitives';
 import { useLayoutEffect, type ReactNode } from 'react';
 import { captureDevPerfTrace } from '@core/features/dev-perf/api/browser/capture-trace';
 import { newTaskKindInWindow } from '@core/features/ozdash/api/browser/ozdash-pm';
+import { ozdashTicketShortcutsImpl } from '@core/features/ozdash/api/browser/ticket-shortcuts';
 import { getProjectStore } from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { toggleAppTheme } from '@core/features/settings/api/browser/theme-toggle';
@@ -142,6 +143,8 @@ export function WindowScope({ children }: { readonly children: ReactNode }) {
     }),
     // OZdash: Cmd+1…9, Cmd+0 open the first 10 sidebar tasks.
     ...ozdashQuickSwitchImpl(),
+    // OZdash: ⌥⌘B Tickets board, ⌥⌘T Ticket panel.
+    ...ozdashTicketShortcutsImpl(),
   } satisfies ViewScopeImpl<typeof windowScope>;
 
   const { instance } = useViewScope(windowScope(), implementation);

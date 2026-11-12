@@ -1,8 +1,10 @@
-// Fork (ozimakov-st): "Tickets" button on the PM project row; opens the Tickets board.
+// Fork (ozimakov-st): "Tickets" button on the PM project row; opens the Tickets board
+// (also ⌥⌘B from anywhere: ozdash.openTicketsBoard).
 import { Tooltip } from '@emdash/ui/react/primitives';
 import { KanbanSquare } from 'lucide-react';
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { projectViewDef } from '@core/features/projects/contributions/views';
+import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useNavigate } from '@core/primitives/navigation/browser/navigation-hooks';
 import { SidebarItemMiniButton } from './sidebar-primitives';
 
@@ -27,7 +29,9 @@ export function OzdashTicketsButton({ projectId }: { projectId: string }) {
           </SidebarItemMiniButton>
         }
       />
-      <Tooltip.Content>Tickets</Tooltip.Content>
+      <Tooltip.Content>
+        Tickets <BoundShortcut command="ozdash.openTicketsBoard" variant="keycaps" />
+      </Tooltip.Content>
     </Tooltip.Root>
   );
 }
