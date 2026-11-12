@@ -101,6 +101,19 @@ reads and writes the ticket files in the vault.
 
 ## Contracts
 
+### Who keeps `status`, `needs_oleg` and `next_check` true
+The board only reads these fields; it never computes them. They are kept true outside OZdash by `ai-toolkit/tools/ticket-status/ticket-status --fix` (one rule set):
+
+| Field | Rule |
+|---|---|
+| `needs_oleg: yes` | an open `- [ ]` line in "Questions for Oleg", or a dependency row whose Status starts with `needs-oleg` |
+| `status: active` | a dependency row is `working`, or the PM has its own next step |
+| `status: waiting` | nothing of ours works; open rows wait on others (reviewers, people, CI, a date) |
+| `status: blocked` | Oleg is needed and nothing else can move |
+| row Status | starts with `working \| needs-oleg \| waiting \| done \| failed`, then `: details` |
+
+It runs: in the PM session before every save and in its background watcher; in the hourly `/oz-ticket-check`; in a work-repo **pre-commit hook** (offline, every ticket commit); and in the launchd job **`dev.ai-toolkit.ticket-status`** every 10 minutes (live: OZdash children + GitHub PRs; commits and pushes). `parked`, `done` and `dropped` are never changed by it. If the board shows a wrong column, check `~/Library/Logs/ai-toolkit/ticket-status.log` first, not the board code.
+
 ### `ticket.md` frontmatter (flat YAML, this order)
 
 ```yaml
