@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { currentTaskOf, pmProjectIdIn, taskTicket, ticketPanelTarget } from './ticket-shortcuts';
+import {
+  currentTaskOf,
+  pmProjectIdIn,
+  startTicketQuestion,
+  taskTicket,
+  ticketDoubleClickAction,
+  ticketPanelTarget,
+} from './ticket-shortcuts';
 import type { TicketSummary } from './tickets';
 
 function ticket(overrides: Partial<TicketSummary>): TicketSummary {
@@ -92,5 +99,37 @@ describe('ticketPanelTarget (Toggle Ticket Panel target)', () => {
   it('has no target in a task without a ticket or outside a task', () => {
     expect(ticketPanelTarget(taskRef('api', 'plain'), tickets, noMarker)).toBeNull();
     expect(ticketPanelTarget({ viewId: 'project', params: {} }, tickets, noMarker)).toBeNull();
+  });
+});
+
+describe('ticketDoubleClickAction', () => {
+  it('opens a live PM session', () => {
+    const live = ticket({ pmSession: 'pm-task' });
+    expect(ticketDoubleClickAction(live, { archived: false })).toBe('open-session');
+    // A parked ticket with a live PM session (parked after it ran) opens it too.
+    expect(ticketDoubleClickAction({ ...live, status: 'parked' }, { archived: false })).toBe(
+      'open-session'
+    );
+  });
+
+  it('asks before starting when there is no live PM session', () => {
+    expect(ticketDoubleClickAction(ticket({ status: 'parked' }), null)).toBe('confirm-start');
+    // pm_session names a task that is gone, or archived.
+    expect(ticketDoubleClickAction(ticket({ pmSession: 'gone' }), null)).toBe('confirm-start');
+    expect(ticketDoubleClickAction(ticket({ pmSession: 'old' }), { archived: true })).toBe(
+      'confirm-start'
+    );
+  });
+
+  it('does nothing for archived tickets', () => {
+    const done = ticket({ status: 'done', pmSession: 'pm-task' });
+    expect(ticketDoubleClickAction(done, { archived: false })).toBe('none');
+    expect(ticketDoubleClickAction(ticket({ status: 'dropped' }), null)).toBe('none');
+  });
+
+  it('words the confirm question with id and title', () => {
+    expect(startTicketQuestion({ id: '12', title: 'Add SCIM' })).toBe(
+      'Start ticket #12 — Add SCIM?'
+    );
   });
 });

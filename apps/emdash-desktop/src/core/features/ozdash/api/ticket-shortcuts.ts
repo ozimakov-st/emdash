@@ -1,8 +1,9 @@
-// Fork (ozimakov-st): pure rules for the ticket shortcuts.
+// Fork (ozimakov-st): pure rules for the ticket shortcuts and the board double-click.
 // - ⌥⌘B "Open Tickets Board": the PM project's Tickets board, from anywhere.
 // - ⌥⌘T "Toggle Ticket Panel": the open task's Ticket tab (only for a task with a ticket).
+// - Double-click on a card / parked row: open the live PM session, else ask to start.
 import { ticketByFileRef } from './ticket-sessions';
-import { ticketForTask, type TicketSummary } from './tickets';
+import { isArchived, ticketForTask, type TicketSummary } from './tickets';
 
 /** The first project (by id) that is the PM project, or null. */
 export function pmProjectIdIn<T>(
@@ -49,4 +50,26 @@ export function ticketPanelTarget(
   const task = currentTaskOf(ref);
   if (!task) return null;
   return taskTicket(task.taskId, tickets, markerTicketId(task.taskId)) ? task : null;
+}
+
+/** What a double-click on a ticket does. */
+export type TicketDoubleClickAction = 'open-session' | 'confirm-start' | 'none';
+
+/**
+ * `open-session` when the ticket has a live PM session (`pm_session` names a task that
+ * exists and is not archived); `confirm-start` otherwise; `none` for archived tickets.
+ * `pmTask` is the task `pm_session` names, or null when it is not in the PM project.
+ */
+export function ticketDoubleClickAction(
+  ticket: Pick<TicketSummary, 'status' | 'pmSession'>,
+  pmTask: { archived: boolean } | null
+): TicketDoubleClickAction {
+  if (isArchived(ticket)) return 'none';
+  if (ticket.pmSession && pmTask && !pmTask.archived) return 'open-session';
+  return 'confirm-start';
+}
+
+/** The confirm text before a double-click starts a ticket. */
+export function startTicketQuestion(ticket: Pick<TicketSummary, 'id' | 'title'>): string {
+  return `Start ticket #${ticket.id} — ${ticket.title}?`;
 }

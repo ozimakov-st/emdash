@@ -3,6 +3,7 @@
 // right (compact rows, built for many tickets); their open/closed state survives restarts.
 // Cards and rows have a read-only P-chip; cards can be dragged within their priority group.
 // A click on a card or parked row opens the ticket popup (priority ▲/▼, Edit, actions).
+// A double-click opens the live PM session, or asks to start the ticket.
 import {
   closestCenter,
   DndContext,
@@ -20,6 +21,7 @@ import {
   Alert,
   Badge,
   Button,
+  Dialog,
   DropdownMenu,
   Popover,
   SearchInput,
@@ -44,6 +46,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -51,6 +54,10 @@ import { isPmProjectInWindow } from '@core/features/ozdash/api/browser/ozdash-pm
 import { ticketsStore } from '@core/features/ozdash/api/browser/tickets-store';
 import { flashRowStyle, priorityCardStyle } from '@core/features/ozdash/api/priority-palette';
 import { newTicketSessionModalProps } from '@core/features/ozdash/api/ticket-issues';
+import {
+  startTicketQuestion,
+  ticketDoubleClickAction,
+} from '@core/features/ozdash/api/ticket-shortcuts';
 import {
   canPark,
   effectivePriority,
@@ -76,6 +83,7 @@ import {
   asAvailableProject,
   getProjectManagerStore,
 } from '@core/features/projects/api/browser/stores/project-selectors';
+import { getTaskManagerStore } from '@core/features/tasks/api/browser/task-state/task-selectors';
 import { useOpenModal } from '@core/manifests/browser/modal-api';
 import { BoundShortcut } from '@core/primitives/keybindings/browser/shortcut';
 import { useMemento } from '@core/primitives/mementos/react';
@@ -97,6 +105,8 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
   const [panelState, setPanelState] = useMemento(ozdashTicketsBoardMemento);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** A double-clicked ticket without a live PM session: "Start ticket …?" */
+  const [confirmStart, setConfirmStart] = useState<TicketSummary | null>(null);
 
   useEffect(() => {
     ticketsStore.ensureStarted();
@@ -144,6 +154,13 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
     } finally {
       setBusy(null);
     }
+  };
+
+  /** Double-click: open the live PM session, else ask before Start. */
+  const onDoubleOpen = (ticket: TicketSummary) => {
+    const action = ticketDoubleClickAction(ticket, pmSessionTask(projectId, ticket.pmSession));
+    if (action === 'open-session') void openTicket(ticket);
+    else if (action === 'confirm-start') setConfirmStart(ticket);
   };
 
   const changeStatus = async (ticket: TicketSummary, action: 'restore' | 'archive' | 'park') => {
@@ -259,6 +276,7 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
                 // A filtered list is not a whole priority group: no reordering while searching.
                 sortable={!searching}
                 onOpen={openTicket}
+                onDoubleOpen={onDoubleOpen}
                 onPark={(target) => void changeStatus(target, 'park')}
               />
             ))}
@@ -286,6 +304,7 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
                         ticket={ticket}
                         busy={busy === ticket.folder}
                         onStart={openTicket}
+                        onDoubleOpen={onDoubleOpen}
                         onArchive={(target) => void changeStatus(target, 'archive')}
                       />
                     ) : (
@@ -303,9 +322,91 @@ export const TicketsBoard = observer(function TicketsBoard({ projectId }: { proj
           )}
         </div>
       )}
+      <StartTicketDialog
+        ticket={confirmStart}
+        onCancel={() => setConfirmStart(null)}
+        onStart={(ticket) => {
+          setConfirmStart(null);
+          void openTicket(ticket);
+        }}
+      />
     </div>
   );
 });
+
+/** The task `pm_session` names in the PM project (and whether it is archived), or null. */
+function pmSessionTask(projectId: string, taskId: string | null): { archived: boolean } | null {
+  const task = taskId ? getTaskManagerStore(projectId)?.tasks.get(taskId) : undefined;
+  if (!task) return null;
+  return {
+    archived: task.state !== 'unregistered' && 'archivedAt' in task.data && !!task.data.archivedAt,
+  };
+}
+
+/** Asks before a double-click starts a ticket (Start = the popup's Start / Open session). */
+function StartTicketDialog({
+  ticket,
+  onCancel,
+  onStart,
+}: {
+  ticket: TicketSummary | null;
+  onCancel: () => void;
+  onStart: (ticket: TicketSummary) => void;
+}) {
+  return (
+    <Dialog.Root open={ticket !== null} onOpenChange={(open) => !open && onCancel()}>
+      {ticket && (
+        <Dialog.Content size="xs">
+          <Dialog.Header showCloseButton={false}>
+            <Dialog.Title className="break-words">{startTicketQuestion(ticket)}</Dialog.Title>
+          </Dialog.Header>
+          <Dialog.Body>
+            <p className="text-sm text-foreground-muted">
+              This makes it active and opens a PM session.
+            </p>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="button" variant="primary" autoFocus onClick={() => onStart(ticket)}>
+              <Play className="size-3.5" />
+              Start
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      )}
+    </Dialog.Root>
+  );
+}
+
+/** After a click, wait this long for a second click before the popup opens. */
+const SINGLE_CLICK_DELAY_MS = 220;
+
+/**
+ * A click opens the popup after a short delay; a double-click cancels it and runs
+ * `onDouble` instead, so the popup never flashes. A keyboard click (detail 0) opens at
+ * once. A double-click on a button inside the card or row (Park, Start, …) or in a
+ * portal (menus) is not the card's.
+ */
+function useClickOrDoubleClick(onSingle: () => void, onDouble: () => void) {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return {
+    onClick: (event: MouseEvent<HTMLElement>) => {
+      clearTimeout(timer.current);
+      if (event.detail === 0) onSingle();
+      else if (event.detail === 1) timer.current = setTimeout(onSingle, SINGLE_CLICK_DELAY_MS);
+      // detail >= 2: the dblclick handler runs.
+    },
+    onDoubleClick: (event: MouseEvent<HTMLElement>) => {
+      clearTimeout(timer.current);
+      const target = event.target as Element;
+      if (!event.currentTarget.contains(target) || target.closest('button')) return;
+      onDouble();
+    },
+  };
+}
 
 function ColumnHeader({ label, count }: { label: string; count: number }) {
   return (
@@ -353,6 +454,7 @@ function TicketColumn({
   busy,
   sortable,
   onOpen,
+  onDoubleOpen,
   onPark,
 }: {
   id: TicketColumnId;
@@ -363,6 +465,7 @@ function TicketColumn({
   /** Drag & drop within a priority group. */
   sortable: boolean;
   onOpen: (ticket: TicketSummary) => void;
+  onDoubleOpen: (ticket: TicketSummary) => void;
   onPark: (ticket: TicketSummary) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -427,6 +530,7 @@ function TicketColumn({
                   busy={busy === ticket.folder}
                   justDragged={justDragged}
                   onOpen={onOpen}
+                  onDoubleOpen={onDoubleOpen}
                   onPark={onPark}
                 />
               ))}
@@ -472,6 +576,8 @@ type TicketCardProps = {
   justDragged: () => boolean;
   /** Opens the PM session (the popup's "Open session"). */
   onOpen: (ticket: TicketSummary) => void;
+  /** Double-click: open the live PM session, or ask to start. */
+  onDoubleOpen: (ticket: TicketSummary) => void;
   onPark: (ticket: TicketSummary) => void;
   drag: {
     ref: (node: HTMLElement | null) => void;
@@ -488,11 +594,20 @@ function TicketCard({
   busy,
   justDragged,
   onOpen,
+  onDoubleOpen,
   onPark,
   drag,
 }: TicketCardProps) {
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const [popup, setPopup] = useState(false);
+  const clicks = useClickOrDoubleClick(
+    () => setPopup(true),
+    () => {
+      // A slow double-click may come after the popup opened.
+      setPopup(false);
+      onDoubleOpen(ticket);
+    }
+  );
   const waiting = ticket.waitingOn
     .map((row) => (row.owner && row.what ? `${row.owner}: ${row.what}` : row.owner || row.what))
     .join('; ');
@@ -509,8 +624,11 @@ function TicketCard({
         tabIndex={0}
         aria-label={`Ticket ${ticket.id}: ${ticket.title}`}
         aria-haspopup="dialog"
-        onClick={() => {
-          if (!justDragged()) setPopup(true);
+        onClick={(event) => {
+          if (!justDragged()) clicks.onClick(event);
+        }}
+        onDoubleClick={(event) => {
+          if (!justDragged()) clicks.onDoubleClick(event);
         }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
@@ -779,15 +897,24 @@ function ParkedRow({
   ticket,
   busy,
   onStart,
+  onDoubleOpen,
   onArchive,
 }: {
   ticket: TicketSummary;
   busy: boolean;
   onStart: (ticket: TicketSummary) => void;
+  onDoubleOpen: (ticket: TicketSummary) => void;
   onArchive: (ticket: TicketSummary) => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [confirming, setConfirming] = useState(false);
+  const clicks = useClickOrDoubleClick(
+    () => setConfirming(true),
+    () => {
+      setConfirming(false);
+      onDoubleOpen(ticket);
+    }
+  );
   return (
     <>
       <div
@@ -796,7 +923,8 @@ function ParkedRow({
         tabIndex={0}
         aria-label={`Parked ticket ${ticket.id}: ${ticket.title}`}
         aria-haspopup="dialog"
-        onClick={() => setConfirming(true)}
+        onClick={clicks.onClick}
+        onDoubleClick={clicks.onDoubleClick}
         onKeyDown={(event) => {
           // Keys on the Start / Archive buttons are theirs.
           if (event.target !== event.currentTarget) return;
