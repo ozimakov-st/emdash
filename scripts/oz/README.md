@@ -7,10 +7,19 @@ The fork builds as **OZdash** (`release/mac-arm64/OZdash.app`). It keeps the old
 `com.emdash.oz` and data dir `emdash-oz`, so it never shares data with the official
 Emdash app. Auto-update is off.
 
-Run OZdash from `/Applications/OZdash.app` (copy the built bundle there with `ditto`), not
-from `release/`. Never delete or rebuild a `release/` bundle while OZdash runs from it:
-new agents then fail with `spawn .../OZdash Helper ENOENT`. `build-mac.sh` refuses to
-build over a running bundle.
+**Run and update (one way only):**
+
+- Run: `/Applications/OZdash.app` (Dock, Spotlight). Never run OZdash from a `release/`
+  folder: deleting or rebuilding that bundle while the app runs breaks every new agent
+  (`spawn .../OZdash Helper ENOENT`). `build-mac.sh` refuses to build over a running bundle.
+- Update: `scripts/oz/update.sh [--ref <branch>]` (default `oz/mcp-server`). It builds in
+  the build-only worktree `~/Projects/ozdash-build`, lists working agents and asks, then
+  quits OZdash normally, keeps the old app as
+  `~/Library/Application Support/OZdash-backup/OZdash-prev.zip`, installs the new one and
+  starts it. The quit/swap/start step runs detached (log: `~/Library/Logs/OZdash-update.log`),
+  so an OZdash agent or terminal can run the script; agents pass `--yes` only after Oleg agreed.
+- Undo: `scripts/oz/update.sh --rollback`.
+- Do not copy bundles into `/Applications` by hand, and do not build in a checkout you work in.
 
 The sidebar shows the "PM" project first: the local project at `~/Projects/work`
 (override with the env var `OZDASH_PM_PROJECT_PATH`).
@@ -126,7 +135,7 @@ table; code in `ozdash/api/agent-palette.ts`). The file is read each time, so ed
   `cursor-grok-4.6-high`). Effort applies in terminal mode only.
 
 - Moving to a new upstream (agents): follow `specs/ozdash/agent-runbook.md`.
-- Build: `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). It builds the
+- Build only (no install): `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). It builds the
   workspace packages first: the app bundles their `dist/`, so skipping that step ships old
   `@emdash/core` / `@emdash/plugins` code (missing cursor `--model`, codex effort). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of

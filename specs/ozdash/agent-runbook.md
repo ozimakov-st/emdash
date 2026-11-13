@@ -317,6 +317,6 @@ git push --force-with-lease origin oz/mcp-server
 git worktree remove ~/Projects/emdash-rebase-$D      # only when Oleg no longer runs that build
 ```
 
-Keep the tag `oz-pre-rebase-$D` (the way back). Do not delete the old app build; Oleg
-moves the new build into place himself (or asks you to run `scripts/oz/build-mac.sh` in
-`~/Projects/emdash` after he quit the app).
+Keep the tag `oz-pre-rebase-$D` (the way back). To install the new build, Oleg runs
+`scripts/oz/update.sh` (or asks you to run it with `--yes`); `update.sh --rollback` puts the
+previous app back. Never copy a bundle into `/Applications` by hand.
