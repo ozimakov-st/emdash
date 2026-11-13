@@ -7,6 +7,11 @@ The fork builds as **OZdash** (`release/mac-arm64/OZdash.app`). It keeps the old
 `com.emdash.oz` and data dir `emdash-oz`, so it never shares data with the official
 Emdash app. Auto-update is off.
 
+Run OZdash from `/Applications/OZdash.app` (copy the built bundle there with `ditto`), not
+from `release/`. Never delete or rebuild a `release/` bundle while OZdash runs from it:
+new agents then fail with `spawn .../OZdash Helper ENOENT`. `build-mac.sh` refuses to
+build over a running bundle.
+
 The sidebar shows the "PM" project first: the local project at `~/Projects/work`
 (override with the env var `OZDASH_PM_PROJECT_PATH`).
 

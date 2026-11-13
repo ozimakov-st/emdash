@@ -78,7 +78,10 @@ async function startAcpSession(
     { ...target.acpInput, mode: 'resume' },
     { timeoutMs: 0 }
   );
-  return started.success
-    ? { started: true }
-    : { started: false, message: started.error.message ?? started.error.type };
+  if (started.success) return { started: true };
+  const { type, message } = started.error;
+  // spawn_failed / initialize_failed carry the real reason (e.g. "spawn ... ENOENT")
+  // only in `cause`, so report it next to the type instead of the bare type.
+  const cause = 'cause' in started.error ? started.error.cause?.message : undefined;
+  return { started: false, message: message ?? (cause ? `${type}: ${cause}` : type) };
 }

@@ -12,6 +12,14 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 APP="$ROOT/apps/emdash-desktop/release/mac-arm64/OZdash.app"
 
+# Never overwrite the bundle a running OZdash uses. Deleting or replacing it while the
+# app runs breaks every new agent: "spawn .../OZdash Helper ENOENT". Run the app from
+# /Applications (ditto the built bundle there) and build in any worktree.
+if pgrep -f "$APP/Contents/" >/dev/null 2>&1; then
+  echo "OZdash is running from $APP. Quit it first, or build in another worktree." >&2
+  exit 1
+fi
+
 cd "$ROOT"
 pnpm install
 # Build the workspace packages first (@emdash/core, @emdash/plugins, …). The app build

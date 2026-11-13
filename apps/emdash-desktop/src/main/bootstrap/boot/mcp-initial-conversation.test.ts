@@ -91,6 +91,21 @@ describe('createStartInitialConversation', () => {
     expect(startSession).not.toHaveBeenCalled();
   });
 
+  it('reports the underlying cause when the ACP session fails to start', async () => {
+    const { dependencies, startSession, input } = fixture();
+    startSession.mockResolvedValue(
+      err({
+        type: 'initialize_failed',
+        cause: { name: 'Error', message: 'spawn /missing/Helper ENOENT' },
+      }) as never
+    );
+    const result = await createStartInitialConversation(dependencies)({ ...input, type: 'acp' });
+    expect(result).toEqual({
+      started: false,
+      message: 'initialize_failed: spawn /missing/Helper ENOENT',
+    });
+  });
+
   it('keeps terminal startup on the task hydration path', async () => {
     const { dependencies, startSession, input } = fixture();
     hydrate.mockResolvedValue(undefined);

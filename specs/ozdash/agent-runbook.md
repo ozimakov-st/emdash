@@ -21,9 +21,9 @@ oz/mcp-server ──●  (old, Oleg's live app; you do not change it)
 1. Never touch the live app data dir `~/Library/Application Support/emdash-oz` (no edits,
    no deletes, no moves). Do not run tests or tools that write there.
 2. Never quit, restart or replace the running OZdash yourself. Ask Oleg. It runs from
-   `~/Projects/emdash/apps/emdash-desktop/release/mac-arm64/OZdash.app`, so do not build
-   in `~/Projects/emdash` (the build would overwrite the running app). Build in a separate
-   worktree (step 2).
+   `/Applications/OZdash.app`. Check with `pgrep -fl OZdash` first: never delete, move or
+   rebuild a bundle a running OZdash uses (new agents then fail with
+   `spawn .../OZdash Helper ENOENT`). Build in a separate worktree (step 2).
 3. Work on a new branch `oz/rebase-<upstream short sha>`. Never commit to, reset or
    force-push `oz/mcp-server` until Oleg says yes in this session.
 4. Never write to the real vault (`~/Projects/work/vault`). For board tests that write,
