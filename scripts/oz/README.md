@@ -12,7 +12,7 @@ Emdash app. Auto-update is off.
 - Run: `/Applications/OZdash.app` (Dock, Spotlight). Never run OZdash from a `release/`
   folder: deleting or rebuilding that bundle while the app runs breaks every new agent
   (`spawn .../OZdash Helper ENOENT`). `build-mac.sh` refuses to build over a running bundle.
-- Update: `scripts/oz/update.sh [--ref <branch>]` (default `oz/mcp-server`). It builds in
+- Update: `scripts/oz/update.sh [--ref <branch>]` (default `origin/oz/mcp-server`, fetched). It builds in
   the build-only worktree `~/Projects/ozdash-build`, lists working agents and asks, then
   quits OZdash normally, keeps the old app as
   `~/Library/Application Support/OZdash-backup/OZdash-prev.zip`, installs the new one and
@@ -20,6 +20,10 @@ Emdash app. Auto-update is off.
   so an OZdash agent or terminal can run the script; agents pass `--yes` only after Oleg agreed.
 - Undo: `scripts/oz/update.sh --rollback`.
 - Do not copy bundles into `/Applications` by hand, and do not build in a checkout you work in.
+
+**Branch rule:** `oz/mcp-server` on GitHub is the one fork branch. Every OZdash change lands
+there right away, linear only: rebase on `origin/oz/mcp-server`, then fast-forward push. No
+merge commits, no force push, no long-lived side branches.
 
 The sidebar shows the "PM" project first: the local project at `~/Projects/work`
 (override with the env var `OZDASH_PM_PROJECT_PATH`).

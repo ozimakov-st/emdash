@@ -6,7 +6,8 @@
 #   scripts/oz/update.sh --rollback [--yes]                     put the previous app back
 #
 # Steps:
-#   1. Build <ref> (default oz/mcp-server) in a build-only worktree (~/Projects/ozdash-build),
+#   1. Fetch, then build <ref> (default origin/oz/mcp-server, the fork branch on GitHub) in a
+#      build-only worktree (~/Projects/ozdash-build),
 #      then move the bundle to /Applications/.OZdash.app.new. The running app is not touched.
 #   2. List agents that are working (app database, read-only). Quitting stops their current
 #      turn; sessions resume after the start. Ask before going on (or --yes).
@@ -29,7 +30,7 @@ LOG="${OZDASH_UPDATE_LOG:-$HOME/Library/Logs/OZdash-update.log}"
 BUILD_DIR="${OZDASH_BUILD_DIR:-$HOME/Projects/ozdash-build}"
 BUNDLE_ID="${OZDASH_BUNDLE_ID:-com.emdash.oz}"
 QUIT_TIMEOUT="${OZDASH_QUIT_TIMEOUT:-120}"
-REF="oz/mcp-server"
+REF="origin/oz/mcp-server"
 YES=0
 MODE=update
 
@@ -52,7 +53,7 @@ while [ $# -gt 0 ]; do
     --rollback) MODE=rollback ;;
     --swap) MODE=swap ;; # internal: the detached quit/swap/start step
     -h | --help)
-      sed -n '2,19p' "$SELF"
+      sed -n '2,20p' "$SELF"
       exit 0
       ;;
     *) fail "unknown argument: $1" ;;
@@ -93,8 +94,10 @@ build() {
   fi
   if [ ! -d "$BUILD_DIR" ]; then
     log "Creating the build-only worktree $BUILD_DIR"
+    git -C "$(dirname "$SELF")" fetch -q origin
     git -C "$(dirname "$SELF")" worktree add --detach "$BUILD_DIR" "$REF"
   fi
+  git -C "$BUILD_DIR" fetch -q origin
   [ -z "$(git -C "$BUILD_DIR" status --porcelain)" ] ||
     fail "$BUILD_DIR has local changes. It is build-only; clean it first."
   git -C "$BUILD_DIR" checkout -q --detach "$REF"
