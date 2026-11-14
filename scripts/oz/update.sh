@@ -85,6 +85,24 @@ confirm_quit() {
   fail "Stopped before quitting. The new build waits at $STAGED; run again later, or pass --yes."
 }
 
+# pnpm (and node) may be missing from PATH: nvm loads lazily in interactive shells only.
+# Look in Homebrew and nvm's node folders, then give up with a clear message.
+find_pnpm() {
+  command -v pnpm >/dev/null 2>&1 && return 0
+  found=""
+  # The last match wins: nvm folders sort after Homebrew, the newest nvm node last.
+  for dir in /opt/homebrew/bin "$HOME"/.nvm/versions/node/*/bin; do
+    [ -x "$dir/pnpm" ] && found="$dir"
+  done
+  if [ -n "$found" ]; then
+    PATH="$found:$PATH"
+    export PATH
+    log "Using pnpm from $found"
+    return 0
+  fi
+  fail "pnpm not found. Run 'corepack enable pnpm' once (Node 24), then try again."
+}
+
 build() {
   if [ -n "${OZDASH_BUILT_APP:-}" ]; then
     # Tests: use a ready bundle instead of building.
@@ -92,6 +110,7 @@ build() {
     ditto "$OZDASH_BUILT_APP" "$STAGED"
     return
   fi
+  find_pnpm
   if [ ! -d "$BUILD_DIR" ]; then
     log "Creating the build-only worktree $BUILD_DIR"
     git -C "$(dirname "$SELF")" fetch -q origin
