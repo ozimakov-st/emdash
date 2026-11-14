@@ -21,6 +21,23 @@ Emdash app. Auto-update is off.
 - Undo: `scripts/oz/update.sh --rollback`.
 - Do not copy bundles into `/Applications` by hand, and do not build in a checkout you work in.
 
+**After a restart (session recovery):** about 15 s after start, OZdash
+(`main/host/ozdash-session-recovery.ts`, rules in `core/features/ozdash/api/session-recovery.ts`):
+
+- resumes every session that was working or waiting when the app stopped and tells it to
+  continue (at most 3 start at the same time; each ticket's PM goes last);
+- does not start sessions that never started (created, first prompt saved, agent never
+  ran), because they may be out of date; the ticket's PM decides;
+- sends each ticket's PM one recovery note: inside its continue message when the PM was
+  interrupted, otherwise as a ticket event that `emdash-oz wait` prints.
+
+MCP tools for this: `get_session_health` (every session's state: error, never-started,
+awaiting-input, working, idle, completed, plus the last recovery result) and
+`start_conversation` (start a never-started session, or resume one). Every recovery result
+is one line in `~/Library/Application Support/emdash-oz/logs/ozdash-recovery.jsonl`;
+start and end and failures also go to `emdash.log` (`ozdash recovery:`). Turn it off with
+`OZDASH_SESSION_RECOVERY=off`.
+
 **Branch rule:** `oz/mcp-server` on GitHub is the one fork branch. Every OZdash change lands
 there right away, linear only: rebase on `origin/oz/mcp-server`, then fast-forward push. No
 merge commits, no force push, no long-lived side branches.

@@ -216,6 +216,7 @@ describe('buildEmdashMcpServer', () => {
       'create_conversation',
       'create_task',
       'delete_task',
+      'get_session_health',
       'get_task_status',
       'list_projects',
       'list_tasks',
@@ -223,6 +224,7 @@ describe('buildEmdashMcpServer', () => {
       'restore_task',
       'run_task_script',
       'send_task_message',
+      'start_conversation',
       'stop_task_script',
     ]);
   });

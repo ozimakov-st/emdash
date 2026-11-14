@@ -15,6 +15,7 @@ import { createTaskFromPrompt, validProviderIds } from './create-task-from-promp
 import type { McpToolDependencies } from './dependencies';
 import { taskTicketStoreOf } from './ozdash-task-ticket-store';
 import { runTaskScript, stopTaskScript } from './run-task-script';
+import { getSessionHealth, startTaskConversation } from './session-health';
 import {
   DEFAULT_STATUS_MAX_CHARS,
   getTaskStatus,
@@ -882,6 +883,52 @@ export function buildEmdashMcpServer(dependencies: McpToolDependencies): McpServ
       if (!result.success) return errorResult(result.error);
       const ticket = await taskTicketStoreOf(dependencies).get(input.taskId);
       return textResult({ ...result.data, ticket });
+    })
+  );
+
+  // Fork (ozimakov-st): session health and starting a session (restart recovery).
+  server.registerTool(
+    'get_session_health',
+    {
+      title: 'Get session health',
+      description:
+        'Lists every agent session in open (not archived) tasks with its state: error, ' +
+        'never-started (created, first prompt saved, but the agent never ran), awaiting-input, ' +
+        'working, idle, or completed; the last activity time; and what the last restart ' +
+        'recovery did with it (continued, not-started, or failed with the reason). Sessions ' +
+        'that need attention come first. Filter by projectId and/or taskId. Read-only.',
+      inputSchema: {
+        projectId: z.string().optional().describe('Only this project (id from list_projects)'),
+        taskId: z.string().optional().describe('Only this task'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    guarded(dependencies, 'get_session_health', async (input) => {
+      const result = await getSessionHealth(dependencies, input);
+      return result.success ? textResult(result.data) : errorResult(result.error);
+    })
+  );
+
+  server.registerTool(
+    'start_conversation',
+    {
+      title: 'Start conversation',
+      description:
+        "Starts or resumes one of a task's agent sessions, the same as opening it in Emdash. " +
+        'A never-started chat session (see get_session_health) runs its saved first prompt; a ' +
+        'session that ran before resumes its history and waits for a message ' +
+        '(send_task_message). Fails with the reason when the agent does not start, for ' +
+        'example a provider login that expired.',
+      inputSchema: {
+        projectId: projectIdInput,
+        taskId: taskIdInput,
+        conversationId: z.string().describe('Conversation id from get_session_health'),
+      },
+      annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    guarded(dependencies, 'start_conversation', async (input) => {
+      const result = await startTaskConversation(dependencies, input);
+      return result.success ? textResult(result.data) : errorResult(result.error);
     })
   );
 

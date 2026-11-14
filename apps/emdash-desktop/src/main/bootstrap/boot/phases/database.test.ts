@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => {
     editorBufferPrune: vi.fn(),
     initializeDatabase: vi.fn(async () => sqlite),
     resetStaleAcpAgentStatuses: vi.fn(),
-    resetStaleTuiAgentStatuses: vi.fn(),
+    resetStaleTuiAgentStatuses: vi.fn(async () => ['tui-1']),
     runInBackground: vi.fn(),
     setWorkspaceIdentityService: vi.fn(),
   };
@@ -82,8 +82,9 @@ describe('database boot phase', () => {
     vi.spyOn(databaseInitializeModule, 'initializeDatabase').mockImplementation(
       mocks.initializeDatabase as never
     );
-    mocks.resetStaleAcpAgentStatuses.mockImplementation(() => {
+    mocks.resetStaleAcpAgentStatuses.mockImplementation(async () => {
       expect(getAppDb()).toBe(mocks.client.db);
+      return ['acp-1'];
     });
   });
 
@@ -92,13 +93,15 @@ describe('database boot phase', () => {
   });
 
   it('initializes and publishes one client before startup repairs', async () => {
-    await bootDatabase({ forceBootFailure: false } as never);
+    const bundle = await bootDatabase({ forceBootFailure: false } as never);
 
     expect(mocks.createDrizzleClient).toHaveBeenCalledOnce();
     expect(mocks.initializeDatabase).toHaveBeenCalledWith(mocks.client.sqlite);
     expect(getAppDb()).toBe(mocks.client.db);
     expect(mocks.client.close).not.toHaveBeenCalled();
     expect(mocks.resetStaleAcpAgentStatuses).toHaveBeenCalledOnce();
+    // OZdash: what the repairs reset is what the restart interrupted (session recovery).
+    expect(bundle.interruptedConversationIds).toEqual(['acp-1', 'tui-1']);
   });
 
   it('disposes the buffer store when startup repairs fail', async () => {

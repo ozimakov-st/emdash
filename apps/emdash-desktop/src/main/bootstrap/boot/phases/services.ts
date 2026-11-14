@@ -74,6 +74,7 @@ import {
 } from '@core/features/mcp/node/server/create-mcp-server';
 import { createTaskTicketStore } from '@core/features/mcp/node/server/ozdash-task-ticket-store';
 import { TICKET_EVENTS_DIR } from '@core/features/ozdash/api/pm-relay';
+import { RECOVERY_JOURNAL_FILE } from '@core/features/ozdash/api/session-recovery';
 import { previewServerService } from '@core/features/preview-servers/api/node/preview-server-service-instance';
 import { PreviewServerAccessService } from '@core/features/preview-servers/node/preview-server-access-service';
 import type { ProjectAttachmentManager } from '@core/features/projects/api/node/project-attachment-manager';
@@ -178,6 +179,7 @@ import { createSystemNotificationSink } from '@main/host/notifications/system-no
 import { registerOzdashAttentionBadge } from '@main/host/ozdash-attention-badge';
 import { installOzdashAttentionChime } from '@main/host/ozdash-attention-chime';
 import { installOzdashPmRelay } from '@main/host/ozdash-pm-relay';
+import { runOzdashSessionRecovery } from '@main/host/ozdash-session-recovery';
 import {
   createOzdashTicketsIssueProvider,
   ozdashTicketsSnapshot,
@@ -952,6 +954,18 @@ export async function bootServices(
       join(app.getPath('userData'), TICKET_EVENTS_DIR)
     )
   );
+  // OZdash: after a restart, continue the sessions that were working and tell each
+  // ticket's PM what was resumed and what never started (main/host/ozdash-session-recovery.ts).
+  void runOzdashSessionRecovery({
+    mcp: mcpServer.dependencies,
+    tickets: ozdashTicketsSnapshot,
+    interruptedIds: database.interruptedConversationIds,
+    logger: log,
+    journalPath: join(app.getPath('userData'), 'logs', RECOVERY_JOURNAL_FILE),
+    eventsDir: join(app.getPath('userData'), TICKET_EVENTS_DIR),
+  }).catch((error: unknown) => {
+    log.warn('ozdash recovery: failed', { error: String(error) });
+  });
   // OZdash: Dock badge with the number of tasks that need attention.
   appScope.add(registerOzdashAttentionBadge());
   // OZdash: Glass chime + macOS banner when a task comes back to Oleg.

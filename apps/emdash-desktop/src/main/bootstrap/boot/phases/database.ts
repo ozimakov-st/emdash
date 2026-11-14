@@ -27,6 +27,8 @@ export type DatabaseBundle = {
   readonly appSettings: AppSettingsService;
   readonly db: AppDb;
   readonly editorBuffer: EditorBufferService;
+  /** OZdash: conversations that were working when the app last stopped (session recovery). */
+  readonly interruptedConversationIds: readonly string[];
   readonly sqlite: Database.Database;
   readonly workspaceIdentity: WorkspaceIdentityService;
 };
@@ -56,11 +58,14 @@ export async function bootDatabase(config: AppConfig): Promise<DatabaseBundle> {
     });
     setWorkspaceIdentityService(workspaceIdentity);
     const buffer = editorBuffer;
-    await step('db-startup-repairs', () => runStartupRepairs(client.db, buffer));
+    const interruptedConversationIds = await step('db-startup-repairs', () =>
+      runStartupRepairs(client.db, buffer)
+    );
     return {
       appSettings,
       db: client.db,
       editorBuffer,
+      interruptedConversationIds,
       sqlite: client.sqlite,
       workspaceIdentity,
     };
@@ -75,9 +80,11 @@ export async function bootDatabase(config: AppConfig): Promise<DatabaseBundle> {
   }
 }
 
-async function runStartupRepairs(db: AppDb, editorBuffer: EditorBufferService): Promise<void> {
-  await resetStaleAcpAgentStatuses(db);
-  await resetStaleTuiAgentStatuses(db);
+async function runStartupRepairs(db: AppDb, editorBuffer: EditorBufferService): Promise<string[]> {
+  const interrupted = [
+    ...(await resetStaleAcpAgentStatuses(db)),
+    ...(await resetStaleTuiAgentStatuses(db)),
+  ];
 
   for (const collision of createWorkspaceRegistry(db).pathCollisions()) {
     log.warn('Workspace path identity collision requires repair', {
@@ -96,4 +103,5 @@ async function runStartupRepairs(db: AppDb, editorBuffer: EditorBufferService): 
   runInBackground('browser-partition-cleanup', cleanupLegacyBrowserPartitions, {
     onError: (error) => log.warn('Failed to clean legacy browser partitions', { error }),
   });
+  return interrupted;
 }

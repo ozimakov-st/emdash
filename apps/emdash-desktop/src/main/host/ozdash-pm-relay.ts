@@ -37,7 +37,7 @@ import type { AgentStatusService } from '@main/core/agent-status/agent-status-se
 const firstRow = <T>(rows: T[]): T | undefined => rows[0];
 
 /** The task's ticket id and PM session id (marker first, else the ticket file). */
-async function ticketOfTask(
+export async function ticketOfTask(
   mcp: McpToolDependencies,
   tickets: readonly TicketSummary[],
   taskId: string

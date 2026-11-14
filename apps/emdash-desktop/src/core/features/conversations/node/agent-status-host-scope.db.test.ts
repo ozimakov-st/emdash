@@ -43,9 +43,11 @@ describe('agent status host scoping', () => {
     seedConversation('local-tui', 'pty', 'local', null, 'awaiting-input');
     seedConversation('remote-acp', 'acp', 'remote', 'ssh-1', 'working');
     seedConversation('remote-tui', 'pty', 'remote', 'ssh-1', 'awaiting-input');
+    seedConversation('local-idle', 'acp', 'local', null, 'idle');
 
-    await resetStaleAcpAgentStatuses(fixture.db);
-    await resetStaleTuiAgentStatuses(fixture.db);
+    // OZdash: the reset returns what it reset, the sessions the restart interrupted.
+    await expect(resetStaleAcpAgentStatuses(fixture.db)).resolves.toEqual(['local-acp']);
+    await expect(resetStaleTuiAgentStatuses(fixture.db)).resolves.toEqual(['local-tui']);
 
     expect(statusOf('local-acp')).toBe('idle');
     expect(statusOf('local-tui')).toBe('idle');
