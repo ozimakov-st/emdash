@@ -28,6 +28,8 @@ import '@fontsource-variable/inter/index.css';
 import '@emdash/ui/style.css';
 import '@emdash/chat-ui/style.css';
 import './index.css';
+// Fork (ozimakov-st): Conductor colors for the Dark theme; must load after index.css.
+import '@core/features/ozdash/browser/conductor-colors.css';
 import 'devicon/devicon.min.css';
 import 'katex/dist/katex.min.css';
 import { MementoClientProvider, SubjectProvider } from '@core/primitives/mementos/react';

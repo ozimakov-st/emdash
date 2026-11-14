@@ -142,6 +142,9 @@ table; code in `ozdash/api/agent-palette.ts`). The file is read each time, so ed
 - Build only (no install): `scripts/oz/build-mac.sh` (needs Node 24 and pnpm 10.28 on PATH). It builds the
   workspace packages first: the app bundles their `dist/`, so skipping that step ships old
   `@emdash/core` / `@emdash/plugins` code (missing cursor `--model`, codex effort). Run `scripts/oz/make-signing-cert.sh` once first, so every build has a valid signature. macOS still asks once for keychain access after each rebuild (no Apple Team ID); click Always Allow.
+- Colors: the Dark theme uses Conductor's colors (measured from a screenshot):
+  `apps/emdash-desktop/src/core/features/ozdash/browser/conductor-colors.css` (one neutral
+  ramp for the app and `@emdash/ui` tokens; unlayered, loaded after `index.css`).
 - Icons: `icon-app.swift` and `icon-light.swift` draw the OZ versions of
   `src/assets/images/emdash/emdash.png` and `icon-light.png` from the upstream
   originals. Run with `swift <script> <upstream png> <out png>`. Make the `.icns`

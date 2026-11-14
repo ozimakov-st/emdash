@@ -35,23 +35,23 @@
 }
 
 .emdark .oz-chat {
-  /* Warm near-black, like Conductor's dark theme (our own approximations). */
-  --oz-bg: #151211;
-  --oz-fg: #ece9e6;
-  --oz-text: #e0dcd8;
-  --oz-muted: #a39e9a;
-  --oz-faint: #77706c;
-  --oz-bubble: #2b2725;
-  --oz-pill: #211e1c;
-  --oz-pill-border: #322d2b;
-  --oz-code-bg: #1d1a18;
+  /* Conductor's dark theme, measured (see ../conductor-colors.css). */
+  --oz-bg: #151110;
+  --oz-fg: #eae8e6;
+  --oz-text: #eae8e6;
+  --oz-muted: #a5a09d;
+  --oz-faint: #766f6c;
+  --oz-bubble: #272523;
+  --oz-pill: #201e1c;
+  --oz-pill-border: #373533;
+  --oz-code-bg: #1b1917;
   --oz-border: rgba(255, 255, 255, 0.1);
   --oz-hover: rgba(255, 255, 255, 0.05);
   --oz-add: #4fd884;
   --oz-del: #f57878;
   --oz-add-bg: rgba(79, 216, 132, 0.09);
   --oz-del-bg: rgba(245, 120, 120, 0.09);
-  --oz-accent: #cfa995;
+  --oz-accent: #ddc1b1;
 }
 
 .oz-scroll {

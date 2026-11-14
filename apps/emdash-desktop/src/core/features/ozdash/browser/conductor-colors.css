@@ -1,0 +1,105 @@
+/*
+ * Fork (ozimakov-st): Conductor colors for the Dark theme.
+ *
+ * Colors measured from a Conductor screenshot (2026-11-13):
+ *   main area, tab bar         #151110   (neutral 1)
+ *   left pane, top/bottom bar  #1b1917   (neutral 3, the sidebar's "tertiary" family)
+ *   composer, raised surfaces  #201e1c   (neutral 4)
+ *   selected sidebar row       #272523   (neutral 5)
+ *   dividers / strong border   #2c2826 / #373533   (neutral 6 / 7)
+ *   text: primary / secondary / muted   #eae8e6 / #a8a7a7 / #7b7a78
+ *
+ * One neutral ramp feeds both color sets: the app's own tokens (renderer/index.css) and
+ * the @emdash/ui tokens (--em-*, packages/theme/src/__generated__). This file is UNLAYERED
+ * on purpose: unlayered declarations beat the layered theme tokens (`@layer base`,
+ * `@layer tokens`), so it wins without raising specificity. Accent and status colors stay
+ * as they are.
+ */
+.emdark {
+  /* App tokens (renderer/index.css). */
+  --neutral-1: #151110;
+  --neutral-2: #181513;
+  --neutral-3: #1b1917;
+  --neutral-4: #201e1c;
+  --neutral-5: #272523;
+  --neutral-6: #2c2826;
+  --neutral-7: #373533;
+  --neutral-8: #4a4643;
+  --neutral-9: #7b7a78;
+  --neutral-10: #8e8b88;
+  --neutral-11: #a8a7a7;
+  --neutral-12: #eae8e6;
+  /* index.css sets these as literal colors, not as neutral steps. */
+  --background: var(--neutral-1);
+  --background-1: var(--neutral-2);
+  --background-2: var(--neutral-3);
+  --background-3: var(--neutral-4);
+  --background-secondary-3: var(--neutral-6);
+  --background-tertiary-2: var(--neutral-5);
+  --background-tertiary-3: var(--neutral-6);
+
+  /* @emdash/ui tokens (generated semantic.css / theme.css). */
+  --em-neutral-1: var(--neutral-1);
+  --em-neutral-2: var(--neutral-2);
+  --em-neutral-3: var(--neutral-3);
+  --em-neutral-4: var(--neutral-4);
+  --em-neutral-5: var(--neutral-5);
+  --em-neutral-6: var(--neutral-6);
+  --em-neutral-7: var(--neutral-7);
+  --em-neutral-8: var(--neutral-8);
+  --em-neutral-9: var(--neutral-9);
+  --em-neutral-10: var(--neutral-10);
+  --em-neutral-11: var(--neutral-11);
+  --em-neutral-12: var(--neutral-12);
+  --em-background: var(--neutral-1);
+  --em-background-1: var(--neutral-2);
+  --em-background-2: var(--neutral-3);
+  --em-background-3: var(--neutral-4);
+  --em-background-secondary: var(--neutral-2);
+  --em-background-secondary-1: var(--neutral-1);
+  --em-background-secondary-2: var(--neutral-4);
+  --em-background-secondary-3: var(--neutral-6);
+  --em-background-tertiary: var(--neutral-3);
+  --em-background-tertiary-1: var(--neutral-4);
+  --em-background-tertiary-2: var(--neutral-5);
+  --em-background-tertiary-3: var(--neutral-6);
+  --em-background-quaternary: var(--neutral-1);
+  --em-background-quaternary-1: var(--neutral-2);
+  --em-background-quaternary-2: var(--neutral-3);
+  --em-foreground: var(--neutral-12);
+  --em-foreground-inverse: var(--neutral-1);
+  --em-foreground-muted: var(--neutral-11);
+  --em-foreground-passive: var(--neutral-9);
+  --em-foreground-secondary: var(--neutral-12);
+  --em-foreground-secondary-muted: var(--neutral-11);
+  --em-foreground-secondary-passive: var(--neutral-9);
+  --em-foreground-tertiary: var(--neutral-12);
+  --em-foreground-tertiary-muted: var(--neutral-11);
+  --em-foreground-tertiary-passive: var(--neutral-9);
+  --em-background-neutral: var(--neutral-12);
+  --em-foreground-neutral: var(--neutral-1);
+  --em-border: var(--neutral-6);
+  --em-border-1: var(--neutral-7);
+  --em-border-2: var(--neutral-8);
+  --em-border-subtle: var(--neutral-5);
+
+  /* Surfaces: the chat, editor and terminal use paper; popovers use elevated. */
+  --em-surface-sunken: #110e0d;
+  --em-surface-sunken-hover: var(--neutral-1);
+  --em-surface-sunken-selected: var(--neutral-3);
+  --em-surface-base: var(--neutral-1);
+  --em-surface-base-hover: var(--neutral-3);
+  --em-surface-base-selected: var(--neutral-4);
+  --em-surface-base-emphasis: var(--neutral-3);
+  --em-surface-base-emphasis-hover: var(--neutral-4);
+  --em-surface-base-emphasis-selected: var(--neutral-5);
+  --em-surface-elevated: var(--neutral-4);
+  --em-surface-elevated-hover: var(--neutral-5);
+  --em-surface-elevated-selected: var(--neutral-6);
+  --em-surface-elevated-emphasis: var(--neutral-5);
+  --em-surface-elevated-emphasis-hover: var(--neutral-6);
+  --em-surface-elevated-emphasis-selected: var(--neutral-7);
+  --em-surface-paper: var(--neutral-1);
+  --em-surface-paper-hover: var(--neutral-3);
+  --em-surface-paper-selected: var(--neutral-4);
+}
