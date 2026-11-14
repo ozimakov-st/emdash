@@ -338,9 +338,19 @@ function reduceInput(s: ParserState, input: ReducerInput, deps: ReducerDeps): Pa
 
   if (input.kind === 'replay_end') {
     const transcript = closeActive(s.transcript, input.at);
+    // Fork (ozimakov-st): a replay rebuilds history in a new agent process, and a background
+    // agent's completion is not part of that history. Agents still running here belonged
+    // to the old process; left as running they block the prompt queue forever.
+    const agents = s.agents.some((agent) => agent.status === 'running')
+      ? s.agents.map((agent) =>
+          agent.status === 'running'
+            ? { ...agent, status: 'completed' as const, completedAt: input.at }
+            : agent
+        )
+      : s.agents;
     return transcript === s.transcript
-      ? { ...s, segment: initialSegment() }
-      : { ...s, transcript, segment: initialSegment() };
+      ? { ...s, agents, segment: initialSegment() }
+      : { ...s, transcript, agents, segment: initialSegment() };
   }
 
   if (input.kind === 'turn_end') {

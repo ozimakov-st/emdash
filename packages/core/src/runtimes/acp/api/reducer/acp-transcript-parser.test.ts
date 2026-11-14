@@ -869,6 +869,49 @@ describe('AcpTranscriptParser', () => {
     });
   });
 
+  // Fork (ozimakov-st): a replay runs in a new agent process, and the completion of a
+  // background agent is not part of the replayed history. Agents still running when the
+  // replay ends belonged to the old process; they must not stay "running" forever.
+  it('settles background agents that are still running when a replay ends', () => {
+    const p = new AcpTranscriptParser(deps());
+    p.beginReplay(10);
+    p.pushEvent(
+      {
+        kind: 'subagent',
+        toolCallId: 'toolu_1',
+        title: 'Watcher',
+        status: 'in_progress',
+        parentToolCallId: null,
+        background: true,
+        agentId: 'agent-1',
+      },
+      100
+    );
+    p.endReplay(200);
+
+    expect(p.agents).toEqual([
+      expect.objectContaining({ agentId: 'agent-1', status: 'completed', completedAt: 200 }),
+    ]);
+  });
+
+  it('keeps background agents running across a live turn end (no replay)', () => {
+    const p = new AcpTranscriptParser(deps());
+    p.pushEvent(
+      {
+        kind: 'subagent',
+        toolCallId: 'toolu_1',
+        title: 'Watcher',
+        status: 'in_progress',
+        parentToolCallId: null,
+        background: true,
+        agentId: 'agent-1',
+      },
+      100
+    );
+    p.endTurn(200);
+    expect(p.agents[0]?.status).toBe('running');
+  });
+
   it('subagent_update completes a background agent without opening a turn', () => {
     const p = new AcpTranscriptParser(deps());
     p.pushEvent(
