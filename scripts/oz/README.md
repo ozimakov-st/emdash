@@ -19,6 +19,10 @@ Emdash app. Auto-update is off.
   starts it. The quit/swap/start step runs detached (log: `~/Library/Logs/OZdash-update.log`),
   so an OZdash agent or terminal can run the script; agents pass `--yes` only after Oleg agreed.
 - Undo: `scripts/oz/update.sh --rollback`.
+- Remove OZdash completely: `scripts/oz/uninstall.sh` (dry run: lists what it would remove),
+  then `--yes` (asks you to type "wipe ozdash"; zips data and settings to
+  `~/OZdash-wipe-backup-<date>.zip` first). `--signing-cert` and `--build-dirs` remove more.
+  It never touches the official Emdash app, agent hooks, task worktrees, or checkouts.
 - Do not copy bundles into `/Applications` by hand, and do not build in a checkout you work in.
 
 **After a restart (session recovery):** about 15 s after start, OZdash
